@@ -359,13 +359,13 @@ class Test:
             # 清屏
             self.epdiy.clear()
             
-            # 显示中文测试文本，增加间距到80px避免重叠
+            # 显示中文测试文本，增加间距到80px避免重叠，避免标点符号
             test_texts = [
-                "你好，世界！",
+                "你好世界",
                 "Papers3",
-                "支持7000+",
+                "支持中文",
                 "MicroPython",
-                "电子墨水屏"
+                "显示测试"
             ]
             
             y_pos = 50
@@ -487,30 +487,30 @@ class Test:
             
             # 绘制标题框 (高度调整为80px)
             self.epdiy.fill_rect(10, 10, 940, 80, 0)  # 黑色背景
-            self.epdiy.draw_text("Papers3 系统状态", 50, 60, 15)  # 白色文字，垂直居中
+            self.epdiy.draw_text("Papers3 状态", 50, 60, 15)  # 白色文字，垂直居中，缩短文本
             
             # 绘制系统信息，使用80px行间距避免重叠
             info_y = 110
             
             # 电池信息 (缩短文本)
             voltage = self.battery.voltage() if self.battery else 3700
-            self.epdiy.draw_text(f"电池: {voltage}mV", 50, info_y, 0)
+            self.epdiy.draw_text(f"电池 {voltage}mV", 50, info_y, 0)
             info_y += 80
             
             # 时间信息 (缩短文本)
             datetime = self.rtc.datetime() if self.rtc else (2024, 1, 1, 0, 12, 0, 0, 0)
             time_str = f"{datetime[1]:02d}/{datetime[2]:02d} {datetime[4]:02d}:{datetime[5]:02d}"
-            self.epdiy.draw_text(f"时间: {time_str}", 50, info_y, 0)
+            self.epdiy.draw_text(f"时间 {time_str}", 50, info_y, 0)
             info_y += 80
             
             # 陀螺仪信息 (缩短文本)
             accel = self.gyro.read_accel() if self.gyro else (0.0, 0.0, 9.8)
-            self.epdiy.draw_text(f"加速度: {accel[2]:.1f}", 50, info_y, 0)
+            self.epdiy.draw_text(f"加速度 {accel[2]:.1f}", 50, info_y, 0)
             info_y += 80
             
             # 绘制信息框 (简化文本，确保不超出边界)
             self.epdiy.draw_rect(30, 300, 500, 120, 0)
-            self.epdiy.draw_text("状态:", 50, 330, 0)
+            self.epdiy.draw_text("状态", 50, 330, 0)
             self.epdiy.draw_text("✓ 显示OK", 80, 380, 0)  # 330+50=380
             
             # 更新显示
@@ -546,16 +546,16 @@ class Test:
                 
                 # 显示电池信息，使用80px行间距避免重叠
                 voltage = self.battery.voltage()
-                self.epdiy.draw_text(f"电池: {voltage}mV", 50, 130, 0)  # 50+80=130
+                self.epdiy.draw_text(f"电池 {voltage}mV", 50, 130, 0)  # 50+80=130
                 
                 # 显示时间 (缩短格式)
                 datetime = self.rtc.datetime()
                 time_str = f"{datetime[4]:02d}:{datetime[5]:02d}"
-                self.epdiy.draw_text(f"时间: {time_str}", 50, 210, 0)  # 130+80=210
+                self.epdiy.draw_text(f"时间 {time_str}", 50, 210, 0)  # 130+80=210
                 
                 # 显示陀螺仪数据 (只显示Z轴)
                 accel = self.gyro.read_accel()
-                self.epdiy.draw_text(f"Z轴: {accel[2]:.1f}", 50, 290, 0)  # 210+80=290
+                self.epdiy.draw_text(f"Z轴 {accel[2]:.1f}", 50, 290, 0)  # 210+80=290
                 
                 # 显示简化状态
                 self.epdiy.draw_text("运行中...", 50, 370, 0)  # 290+80=370
@@ -611,8 +611,8 @@ class Test:
             # 简单的中文测试，使用80px间距避免重叠
             print("  绘制第1行: '你好世界' at y=100")
             self.epdiy.draw_text("你好世界", 50, 100, 0)
-            print("  绘制第2行: 'Papers3 中文显示' at y=180")
-            self.epdiy.draw_text("Papers3 中文显示", 50, 180, 0)  # 100+80=180
+            print("  绘制第2行: 'Papers3 中文' at y=180")
+            self.epdiy.draw_text("Papers3 中文", 50, 180, 0)  # 100+80=180
             
             # 更新显示
             print("  更新显示...")
