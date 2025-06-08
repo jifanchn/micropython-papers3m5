@@ -1,26 +1,22 @@
 /*
- * Papers3 BM8563 RTC模块
- * 
- * 硬件: BM8563实时时钟 (I2C地址: 0x51)
- * 功能: 时间日期读写，闹钟设置
- * 设计: 面向对象接口 papers3.RTC()
- * 接口: 使用MicroPython的machine.I2C
+ * Papers3 BM8563 RTC Module  
+ * 使用ESP-IDF I2C驱动，与陀螺仪共享I2C总线
  */
 
 #include "py/runtime.h"
 #include "py/obj.h"
-#include "py/mphal.h"
+#include "py/builtin.h"
 #include "py/mperrno.h"
 
+// ESP-IDF I2C驱动
+#include "driver/i2c.h"
 #include "esp_log.h"
-#include "py/builtin.h"
 
 #define TAG "papers3_rtc"
 
-// BM8563 I2C配置
+// BM8563 硬件配置
 #define BM8563_I2C_ADDR         0x51
-#define BM8563_I2C_SDA_PIN      8
-#define BM8563_I2C_SCL_PIN      9
+#define BM8563_I2C_PORT         I2C_NUM_0
 
 // BM8563 寄存器地址
 #define BM8563_CONTROL_STATUS1  0x00
@@ -43,12 +39,44 @@
 #define BM8563_ALARM_ENABLE     0x80
 #define BM8563_ALARM_DISABLE    0x7F
 
+// 外部I2C初始化标志
+extern bool g_i2c_initialized;
+
 // 结构体定义
 typedef struct _papers3_rtc_obj_t {
     mp_obj_base_t base;
     bool initialized;
-    mp_obj_t i2c_obj;  // MicroPython I2C对象
 } papers3_rtc_obj_t;
+
+// ESP-IDF I2C初始化函数（与gyro模块共享）
+static esp_err_t papers3_i2c_init(void) {
+    if (g_i2c_initialized) {
+        return ESP_OK;  // 已经初始化，直接返回
+    }
+    
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = 41,  // SDA pin
+        .scl_io_num = 42,  // SCL pin
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = 100000,  // 100kHz
+    };
+    
+    esp_err_t ret = i2c_param_config(BM8563_I2C_PORT, &conf);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    
+    ret = i2c_driver_install(BM8563_I2C_PORT, conf.mode, 0, 0, 0);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    
+    g_i2c_initialized = true;
+    ESP_LOGI(TAG, "I2C总线初始化成功");
+    return ESP_OK;
+}
 
 // BCD转换函数
 static uint8_t bcd_to_dec(uint8_t bcd) {
@@ -59,62 +87,43 @@ static uint8_t dec_to_bcd(uint8_t dec) {
     return ((dec / 10) << 4) + (dec % 10);
 }
 
-// I2C读写函数 - 使用MicroPython的I2C接口
-static int bm8563_i2c_read(papers3_rtc_obj_t *self, uint8_t reg_addr, uint8_t *data, size_t len) {
-    if (!self->i2c_obj || self->i2c_obj == mp_const_none) {
-        return -1;
+// I2C读写函数
+static esp_err_t bm8563_i2c_read(uint8_t reg_addr, uint8_t *data, size_t len) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (BM8563_I2C_ADDR << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmd, reg_addr, true);
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (BM8563_I2C_ADDR << 1) | I2C_MASTER_READ, true);
+    if (len > 1) {
+        i2c_master_read(cmd, data, len - 1, I2C_MASTER_ACK);
     }
-    
-    mp_obj_t dest[3];
-    
-    // 准备参数: addr, memaddr, nbytes
-    dest[0] = mp_obj_new_int(BM8563_I2C_ADDR);
-    dest[1] = mp_obj_new_int(reg_addr);
-    dest[2] = mp_obj_new_int(len);
-    
-    // 调用 i2c.readfrom_mem(addr, memaddr, nbytes)
-    mp_obj_t args[5] = {self->i2c_obj, MP_OBJ_NEW_QSTR(MP_QSTR_readfrom_mem), dest[0], dest[1], dest[2]};
-    mp_obj_t result = mp_call_method_n_kw(3, 0, args);
-    
-    if (result != mp_const_none) {
-        mp_buffer_info_t bufinfo;
-        mp_get_buffer_raise(result, &bufinfo, MP_BUFFER_READ);
-        if (bufinfo.len >= len) {
-            memcpy(data, bufinfo.buf, len);
-            return 0;
-        }
-    }
-    return -1;
+    i2c_master_read_byte(cmd, data + len - 1, I2C_MASTER_NACK);
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin(BM8563_I2C_PORT, cmd, 1000 / portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmd);
+    return ret;
 }
 
-static int bm8563_i2c_write(papers3_rtc_obj_t *self, uint8_t reg_addr, uint8_t data) {
-    if (!self->i2c_obj || self->i2c_obj == mp_const_none) {
-        return -1;
-    }
-    
-    mp_obj_t dest[3];
-    
-    // 准备参数: addr, memaddr, data
-    dest[0] = mp_obj_new_int(BM8563_I2C_ADDR);
-    dest[1] = mp_obj_new_int(reg_addr);
-    dest[2] = mp_obj_new_bytes(&data, 1);
-    
-    // 调用 i2c.writeto_mem(addr, memaddr, data)
-    mp_obj_t args[5] = {self->i2c_obj, MP_OBJ_NEW_QSTR(MP_QSTR_writeto_mem), dest[0], dest[1], dest[2]};
-    mp_obj_t result = mp_call_method_n_kw(3, 0, args);
-    
-    return (result != mp_const_none) ? 0 : -1;
+static esp_err_t bm8563_i2c_write(uint8_t reg_addr, uint8_t data) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (BM8563_I2C_ADDR << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmd, reg_addr, true);
+    i2c_master_write_byte(cmd, data, true);
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin(BM8563_I2C_PORT, cmd, 1000 / portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmd);
+    return ret;
 }
 
 // RTC构造函数
 static mp_obj_t papers3_rtc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
     
-    // 前向声明类型
     extern const mp_obj_type_t papers3_rtc_type;
     papers3_rtc_obj_t *self = mp_obj_malloc(papers3_rtc_obj_t, &papers3_rtc_type);
     self->initialized = false;
-    self->i2c_obj = mp_const_none;
     
     return MP_OBJ_FROM_PTR(self);
 }
@@ -125,54 +134,36 @@ static mp_obj_t papers3_rtc_init(mp_obj_t self_in) {
     
     ESP_LOGI(TAG, "初始化BM8563 RTC");
     
-    // 创建I2C对象 machine.I2C(0, scl=Pin(9), sda=Pin(8), freq=100000)
-    mp_obj_t args[5];
-    
-    // 导入machine模块
-    mp_obj_t machine_module = mp_import_name(MP_QSTR_machine, mp_const_none, MP_OBJ_NEW_SMALL_INT(0));
-    
-    // 获取Pin和I2C类
-    mp_obj_t pin_class = mp_load_attr(machine_module, MP_QSTR_Pin);
-    mp_obj_t i2c_class = mp_load_attr(machine_module, MP_QSTR_I2C);
-    
-    // 创建Pin对象
-    mp_obj_t scl_pin = mp_call_function_1(pin_class, mp_obj_new_int(BM8563_I2C_SCL_PIN));
-    mp_obj_t sda_pin = mp_call_function_1(pin_class, mp_obj_new_int(BM8563_I2C_SDA_PIN));
-    
-    // 创建I2C对象: I2C(0, scl=scl_pin, sda=sda_pin, freq=100000)
-    args[0] = mp_obj_new_int(0);  // I2C ID
-    
-    mp_obj_t kw_args[3];
-    kw_args[0] = scl_pin;
-    kw_args[1] = sda_pin; 
-    kw_args[2] = mp_obj_new_int(100000);  // 100kHz
-    
-    static const qstr kw_names[3] = {MP_QSTR_scl, MP_QSTR_sda, MP_QSTR_freq};
-    
-    // 构建完整的参数数组 (总共7个参数)
-    mp_obj_t all_args[7] = {args[0], MP_OBJ_NEW_QSTR(kw_names[0]), kw_args[0], 
-                            MP_OBJ_NEW_QSTR(kw_names[1]), kw_args[1], 
-                            MP_OBJ_NEW_QSTR(kw_names[2]), kw_args[2]};
-    self->i2c_obj = mp_call_function_n_kw(i2c_class, 1, 3, all_args);
+    // 初始化I2C总线（如果尚未初始化）
+    esp_err_t ret = papers3_i2c_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "I2C初始化失败: %s", esp_err_to_name(ret));
+        mp_raise_OSError(MP_EIO);
+    }
     
     // 检查RTC是否响应
     uint8_t status1;
-    if (bm8563_i2c_read(self, BM8563_CONTROL_STATUS1, &status1, 1) != 0) {
-        ESP_LOGE(TAG, "无法读取BM8563状态寄存器");
+    ret = bm8563_i2c_read(BM8563_CONTROL_STATUS1, &status1, 1);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "无法读取BM8563状态寄存器: %s", esp_err_to_name(ret));
         mp_raise_OSError(MP_EIO);
     }
     
     // 清除控制/状态寄存器
-    if (bm8563_i2c_write(self, BM8563_CONTROL_STATUS1, 0x00) != 0) {
+    ret = bm8563_i2c_write(BM8563_CONTROL_STATUS1, 0x00);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "清除状态寄存器1失败: %s", esp_err_to_name(ret));
         mp_raise_OSError(MP_EIO);
     }
     
-    if (bm8563_i2c_write(self, BM8563_CONTROL_STATUS2, 0x00) != 0) {
+    ret = bm8563_i2c_write(BM8563_CONTROL_STATUS2, 0x00);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "清除状态寄存器2失败: %s", esp_err_to_name(ret));
         mp_raise_OSError(MP_EIO);
     }
     
     self->initialized = true;
-    ESP_LOGI(TAG, "BM8563 RTC初始化成功");
+    ESP_LOGI(TAG, "BM8563 RTC初始化成功，状态1: 0x%02X", status1);
     
     return mp_const_none;
 }
@@ -183,7 +174,6 @@ static mp_obj_t papers3_rtc_deinit(mp_obj_t self_in) {
     papers3_rtc_obj_t *self = MP_OBJ_TO_PTR(self_in);
     
     if (self->initialized) {
-        self->i2c_obj = mp_const_none;
         self->initialized = false;
         ESP_LOGI(TAG, "BM8563 RTC已反初始化");
     }
@@ -203,65 +193,82 @@ static mp_obj_t papers3_rtc_datetime(size_t n_args, const mp_obj_t *args) {
     if (n_args == 1) {
         // 读取时间
         uint8_t rtc_data[7];
-        if (bm8563_i2c_read(self, BM8563_SECONDS, rtc_data, 7) != 0) {
+        esp_err_t ret = bm8563_i2c_read(BM8563_SECONDS, rtc_data, 7);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "读取RTC时间失败: %s", esp_err_to_name(ret));
             mp_raise_OSError(MP_EIO);
         }
         
-        mp_obj_t tuple[8] = {
-            mp_obj_new_int(2000 + bcd_to_dec(rtc_data[6] & 0xFF)),  // year
-            mp_obj_new_int(bcd_to_dec(rtc_data[5] & 0x1F)),         // month
-            mp_obj_new_int(bcd_to_dec(rtc_data[3] & 0x3F)),         // day
-            mp_obj_new_int(rtc_data[4] & 0x07),                     // weekday
-            mp_obj_new_int(bcd_to_dec(rtc_data[2] & 0x3F)),         // hour
-            mp_obj_new_int(bcd_to_dec(rtc_data[1] & 0x7F)),         // minute
-            mp_obj_new_int(bcd_to_dec(rtc_data[0] & 0x7F)),         // second
-            mp_obj_new_int(0)                                       // subsecond
+        // 转换BCD到十进制
+        uint8_t second = bcd_to_dec(rtc_data[0] & 0x7F);
+        uint8_t minute = bcd_to_dec(rtc_data[1] & 0x7F);
+        uint8_t hour = bcd_to_dec(rtc_data[2] & 0x3F);
+        uint8_t day = bcd_to_dec(rtc_data[3] & 0x3F);
+        uint8_t weekday = bcd_to_dec(rtc_data[4] & 0x07);
+        uint8_t month = bcd_to_dec(rtc_data[5] & 0x1F);
+        uint8_t year = bcd_to_dec(rtc_data[6]) + 2000;  // BM8563从2000年开始计算
+        
+        mp_obj_t tuple[7] = {
+            mp_obj_new_int(year),
+            mp_obj_new_int(month),
+            mp_obj_new_int(day),
+            mp_obj_new_int(weekday),
+            mp_obj_new_int(hour),
+            mp_obj_new_int(minute),
+            mp_obj_new_int(second)
         };
         
-        return mp_obj_new_tuple(8, tuple);
-    } else if (n_args == 2) {
-        // 设置时间 - 参数: (year, month, day, weekday, hour, minute, second, subsecond)
-        mp_obj_t *datetime_tuple;
-        size_t tuple_len;
-        mp_obj_get_array(args[1], &tuple_len, &datetime_tuple);
-        
-        if (tuple_len < 7) {
-            mp_raise_ValueError(MP_ERROR_TEXT("datetime tuple should have at least 7 elements"));
+        return mp_obj_new_tuple(7, tuple);
+    } else {
+        // 设置时间
+        if (n_args != 8) {
+            mp_raise_TypeError(MP_ERROR_TEXT("datetime requires 7 arguments: (year, month, day, weekday, hour, minute, second)"));
         }
         
-        int year = mp_obj_get_int(datetime_tuple[0]);
-        int month = mp_obj_get_int(datetime_tuple[1]);
-        int day = mp_obj_get_int(datetime_tuple[2]);
-        int weekday = mp_obj_get_int(datetime_tuple[3]);
-        int hour = mp_obj_get_int(datetime_tuple[4]);
-        int minute = mp_obj_get_int(datetime_tuple[5]);
-        int second = mp_obj_get_int(datetime_tuple[6]);
+        uint16_t year = mp_obj_get_int(args[1]);
+        uint8_t month = mp_obj_get_int(args[2]);
+        uint8_t day = mp_obj_get_int(args[3]);
+        uint8_t weekday = mp_obj_get_int(args[4]);
+        uint8_t hour = mp_obj_get_int(args[5]);
+        uint8_t minute = mp_obj_get_int(args[6]);
+        uint8_t second = mp_obj_get_int(args[7]);
         
-        // 写入RTC
+        // 验证输入范围
+        if (year < 2000 || year > 2099 || month < 1 || month > 12 || 
+            day < 1 || day > 31 || weekday > 6 || 
+            hour > 23 || minute > 59 || second > 59) {
+            mp_raise_ValueError(MP_ERROR_TEXT("Invalid datetime values"));
+        }
+        
+        // 转换为BCD格式并写入RTC
         uint8_t rtc_data[7] = {
             dec_to_bcd(second),
             dec_to_bcd(minute),
             dec_to_bcd(hour),
             dec_to_bcd(day),
-            weekday & 0x07,
+            dec_to_bcd(weekday),
             dec_to_bcd(month),
-            dec_to_bcd(year - 2000)
+            dec_to_bcd(year - 2000)  // BM8563从2000年开始计算
         };
         
+        esp_err_t ret = ESP_OK;
         for (int i = 0; i < 7; i++) {
-            if (bm8563_i2c_write(self, BM8563_SECONDS + i, rtc_data[i]) != 0) {
+            ret = bm8563_i2c_write(BM8563_SECONDS + i, rtc_data[i]);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "设置RTC时间失败: %s", esp_err_to_name(ret));
                 mp_raise_OSError(MP_EIO);
             }
         }
         
+        ESP_LOGI(TAG, "RTC时间设置成功: %04d-%02d-%02d %02d:%02d:%02d", 
+                 year, month, day, hour, minute, second);
+        
         return mp_const_none;
-    } else {
-        mp_raise_TypeError(MP_ERROR_TEXT("datetime() takes 0 or 1 argument"));
     }
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_rtc_datetime_obj, 1, 2, papers3_rtc_datetime);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_rtc_datetime_obj, 1, 8, papers3_rtc_datetime);
 
-// alarm() 方法 - 设置闹钟 (day, hour, minute)
+// alarm() 方法 - 设置或读取闹钟
 static mp_obj_t papers3_rtc_alarm(size_t n_args, const mp_obj_t *args) {
     papers3_rtc_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     
@@ -272,63 +279,81 @@ static mp_obj_t papers3_rtc_alarm(size_t n_args, const mp_obj_t *args) {
     if (n_args == 1) {
         // 读取闹钟设置
         uint8_t alarm_data[4];
-        if (bm8563_i2c_read(self, BM8563_MINUTE_ALARM, alarm_data, 4) != 0) {
+        esp_err_t ret = bm8563_i2c_read(BM8563_MINUTE_ALARM, alarm_data, 4);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "读取闹钟设置失败: %s", esp_err_to_name(ret));
             mp_raise_OSError(MP_EIO);
         }
         
+        // 检查闹钟是否启用
         bool enabled = !(alarm_data[0] & BM8563_ALARM_ENABLE);
         
-        mp_obj_t tuple[4] = {
-            mp_obj_new_bool(enabled),
-            mp_obj_new_int(bcd_to_dec(alarm_data[2] & 0x3F)),  // day
-            mp_obj_new_int(bcd_to_dec(alarm_data[1] & 0x3F)),  // hour
-            mp_obj_new_int(bcd_to_dec(alarm_data[0] & 0x7F))   // minute
-        };
-        
-        return mp_obj_new_tuple(4, tuple);
-    } else if (n_args == 4) {
-        // 设置闹钟 (day, hour, minute)
-        int day = mp_obj_get_int(args[1]);
-        int hour = mp_obj_get_int(args[2]);
-        int minute = mp_obj_get_int(args[3]);
-        
-        // 写入闹钟寄存器
-        if (bm8563_i2c_write(self, BM8563_MINUTE_ALARM, dec_to_bcd(minute)) != 0) {
-            mp_raise_OSError(MP_EIO);
+        if (enabled) {
+            uint8_t minute = bcd_to_dec(alarm_data[0] & 0x7F);
+            uint8_t hour = bcd_to_dec(alarm_data[1] & 0x3F);
+            uint8_t day = bcd_to_dec(alarm_data[2] & 0x3F);
+            uint8_t weekday = bcd_to_dec(alarm_data[3] & 0x07);
+            
+            mp_obj_t tuple[4] = {
+                mp_obj_new_int(hour),
+                mp_obj_new_int(minute),
+                mp_obj_new_int(day),
+                mp_obj_new_int(weekday)
+            };
+            
+            return mp_obj_new_tuple(4, tuple);
+        } else {
+            return mp_const_none;  // 闹钟未启用
+        }
+    } else {
+        // 设置闹钟
+        if (n_args != 3) {
+            mp_raise_TypeError(MP_ERROR_TEXT("alarm requires 2 arguments: (hour, minute) or None to disable"));
         }
         
-        if (bm8563_i2c_write(self, BM8563_HOUR_ALARM, dec_to_bcd(hour)) != 0) {
-            mp_raise_OSError(MP_EIO);
-        }
-        
-        if (bm8563_i2c_write(self, BM8563_DAY_ALARM, dec_to_bcd(day)) != 0) {
-            mp_raise_OSError(MP_EIO);
-        }
-        
-        // 禁用weekday闹钟
-        if (bm8563_i2c_write(self, BM8563_WEEKDAY_ALARM, BM8563_ALARM_ENABLE) != 0) {
-            mp_raise_OSError(MP_EIO);
-        }
-        
-        // 启用闹钟
-        uint8_t status2;
-        if (bm8563_i2c_read(self, BM8563_CONTROL_STATUS2, &status2, 1) != 0) {
-            mp_raise_OSError(MP_EIO);
-        }
-        
-        status2 |= 0x02;  // 启用闹钟中断
-        if (bm8563_i2c_write(self, BM8563_CONTROL_STATUS2, status2) != 0) {
-            mp_raise_OSError(MP_EIO);
+        if (args[1] == mp_const_none) {
+            // 禁用闹钟
+            esp_err_t ret = bm8563_i2c_write(BM8563_MINUTE_ALARM, BM8563_ALARM_ENABLE);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "禁用闹钟失败: %s", esp_err_to_name(ret));
+                mp_raise_OSError(MP_EIO);
+            }
+            ESP_LOGI(TAG, "闹钟已禁用");
+        } else {
+            // 启用闹钟
+            uint8_t hour = mp_obj_get_int(args[1]);
+            uint8_t minute = mp_obj_get_int(args[2]);
+            
+            if (hour > 23 || minute > 59) {
+                mp_raise_ValueError(MP_ERROR_TEXT("Invalid alarm time"));
+            }
+            
+            // 设置闹钟（只设置时和分）
+            esp_err_t ret = bm8563_i2c_write(BM8563_MINUTE_ALARM, dec_to_bcd(minute));
+            if (ret == ESP_OK) {
+                ret = bm8563_i2c_write(BM8563_HOUR_ALARM, dec_to_bcd(hour));
+            }
+            if (ret == ESP_OK) {
+                ret = bm8563_i2c_write(BM8563_DAY_ALARM, BM8563_ALARM_ENABLE);    // 禁用日闹钟
+            }
+            if (ret == ESP_OK) {
+                ret = bm8563_i2c_write(BM8563_WEEKDAY_ALARM, BM8563_ALARM_ENABLE); // 禁用周闹钟
+            }
+            
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "设置闹钟失败: %s", esp_err_to_name(ret));
+                mp_raise_OSError(MP_EIO);
+            }
+            
+            ESP_LOGI(TAG, "闹钟设置成功: %02d:%02d", hour, minute);
         }
         
         return mp_const_none;
-    } else {
-        mp_raise_TypeError(MP_ERROR_TEXT("alarm() takes 0 or 3 arguments"));
     }
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_rtc_alarm_obj, 1, 4, papers3_rtc_alarm);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_rtc_alarm_obj, 1, 3, papers3_rtc_alarm);
 
-// 方法表
+// 本地方法表
 static const mp_rom_map_elem_t papers3_rtc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&papers3_rtc_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&papers3_rtc_deinit_obj) },
