@@ -17,8 +17,8 @@
 // BMI270 硬件配置
 #define BMI270_I2C_ADDR         0x68
 #define BMI270_I2C_PORT         I2C_NUM_0
-#define BMI270_I2C_SDA_PIN      8
-#define BMI270_I2C_SCL_PIN      9
+#define BMI270_I2C_SDA_PIN      41
+#define BMI270_I2C_SCL_PIN      42
 #define BMI270_I2C_FREQ         100000
 
 // BMI270 寄存器地址

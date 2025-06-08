@@ -56,8 +56,8 @@ static esp_err_t papers3_i2c_init(void) {
     
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
-        .sda_io_num = 8,  // SDA pin
-        .scl_io_num = 9,  // SCL pin
+        .sda_io_num = 41,  // SDA pin
+        .scl_io_num = 42,  // SCL pin
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
         .master.clk_speed = 100000,  // 100kHz
