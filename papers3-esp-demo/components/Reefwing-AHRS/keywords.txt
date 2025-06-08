@@ -1,0 +1,63 @@
+#######################################
+# IDE Map for Reefwing AHRS
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+ReefwingAHRS    KEYWORD1
+BoardType   KEYWORD1
+DOF KEYWORD1
+ImuType KEYWORD1
+Quaternion  KEYWORD1
+SensorFusion    KEYWORD1
+SelfTestResults KEYWORD1
+BiasOffsets KEYWORD1
+EulerAngles KEYWORD1
+SensorData  KEYWORD1
+ExtendedKalmanFilter    KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin  KEYWORD2
+update  KEYWORD2
+classicUpdate   KEYWORD2
+madgwickUpdate  KEYWORD2
+mahonyUpdate   KEYWORD2
+complementaryUpdate KEYWORD2
+extendedKalmanUpdate    KEYWORD2
+tiltCompensatedYaw  KEYWORD2
+setFusionAlgorithm  KEYWORD2
+setAlpha    KEYWORD2
+setBeta KEYWORD2
+setGyroMeasError    KEYWORD2
+setKp   KEYWORD2
+setKi   KEYWORD2
+setDeclination  KEYWORD2
+setData KEYWORD2
+setDOF  KEYWORD2
+setImuType  KEYWORD2
+setBoardType    KEYWORD2
+updateEulerAngles   KEYWORD2
+getQuaternion   KEYWORD2
+gyroToRadians   KEYWORD2
+getBoardType    KEYWORD2
+getBoardTypeString  KEYWORD2
+formatAnglesForConfigurator KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+MADGWICK    LITERAL1
+MAHONY  LITERAL1
+COMPLEMENTARY   LITERAL1
+FUSION  LITERAL1
+CLASSIC LITERAL1
+EXTENDED_KALMAN  LITERAL1
+NONE    LITERAL1
+DEG_TO_RAD  LITERAL1
+RAD_TO_DEG  LITERAL1

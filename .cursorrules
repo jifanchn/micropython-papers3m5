@@ -1,0 +1,31 @@
+# 工程目标
+    创建一个micropython + papers3m5的镜像支持包
+    micropython使用v1.2.5
+    epdiy使用2.0.0
+    idf使用5.4.1
+
+# 初始目录文件
+    ./epdiy/             GIT epdiy仓库
+    ./micropython        GIT micropython仓库，能否尽可能不动？
+    ./papers3-esp-demo   原始参考工程，不能动里面的文件
+    ./papers3
+
+# 相关硬件说明
+    先完成epdiy部分，该部分的相关硬件定义你可以搜索papers3-esp-demo中的相关文件
+    该硬件是esp32s3，16MFlash 8MPSRAM，在任何编译之前你必须都确保该设定正常，否则编译会失败
+    
+# 代码说明
+    你必须小心，我不知道有没有办法在保持epdiy和micropython的git分支的基础上增加文件，这样可以减少本仓库的体积
+    idf版本你要检查，不要重复频繁下载
+
+# 验证说明
+    你要编译出micropython的固件，然后我来验证固件是否正常
+    你需要：编译成功，然后用mcp交互工具告诉我：
+    哪个命令清空flash，哪个命令烧写程序，然后哪几条连续的可复制进串口的程序可以用来测试，我会把micropython的返回再告诉你。
+    注意你的代码中必须要包含flash和ram体积的检查，确认编译完的版本正确
+
+# 进度要求
+    你要利用好README.md文件，写好内容和进度
+
+# ignore要求
+    你要把不该存的都写进ignore文件
