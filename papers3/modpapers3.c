@@ -32,13 +32,14 @@ static mp_obj_t papers3_info(void) {
     mp_printf(&mp_plat_print, "  - papers3.Battery() - Battery monitoring (real ADC)\n");
     mp_printf(&mp_plat_print, "  - papers3.Gyro() - BMI270 accelerometer + gyroscope\n");
     mp_printf(&mp_plat_print, "  - papers3.RTC() - BM8563 real-time clock\n");
-    mp_printf(&mp_plat_print, "  - papers3.EPDiy() - E-Paper display control (960x540, 16-level grayscale)\n");
+    mp_printf(&mp_plat_print, "  - papers3.EPDiy() - E-Paper display control with Chinese font support\n");
     mp_printf(&mp_plat_print, "  - papers3.LED() - LED control (GPIO 0)\n");
     // 移除冲突模块: mp_printf(&mp_plat_print, "  - papers3.Button() - Button and status detection (GPIO 4, 5)\n");
     mp_printf(&mp_plat_print, "  - papers3.Touch() - GT911 capacitive touch screen\n");
     mp_printf(&mp_plat_print, "System functions:\n");
     mp_printf(&mp_plat_print, "  - papers3.flash_info() - Flash memory information\n");
     mp_printf(&mp_plat_print, "  - papers3.ram_info() - RAM memory information\n");
+
     mp_printf(&mp_plat_print, "Note: Using ESP-IDF I2C drivers for hardware compatibility\n");
     return mp_const_none;
 }
@@ -113,12 +114,23 @@ static mp_obj_t papers3_ram_info(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(papers3_ram_info_obj, papers3_ram_info);
 
+// Test function - creates a test instance
+static mp_obj_t papers3_test(void) {
+    // Import the test module and create an instance
+    mp_obj_t test_module = mp_import_name(MP_QSTR_test, mp_const_none, MP_OBJ_NEW_SMALL_INT(0));
+    mp_obj_t create_test_func = mp_load_attr(test_module, MP_QSTR_create_test);
+    return mp_call_function_0(create_test_func);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(papers3_test_obj, papers3_test);
+
 // Module globals table
 static const mp_rom_map_elem_t papers3_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_papers3) },
     { MP_ROM_QSTR(MP_QSTR_info), MP_ROM_PTR(&papers3_info_obj) },
     { MP_ROM_QSTR(MP_QSTR_flash_info), MP_ROM_PTR(&papers3_flash_info_obj) },
     { MP_ROM_QSTR(MP_QSTR_ram_info), MP_ROM_PTR(&papers3_ram_info_obj) },
+    { MP_ROM_QSTR(MP_QSTR_test), MP_ROM_PTR(&papers3_test_obj) },
+
     
     // Object-oriented classes only
     { MP_ROM_QSTR(MP_QSTR_Buzzer), MP_ROM_PTR(&papers3_buzzer_type) },

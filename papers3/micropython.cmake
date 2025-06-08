@@ -151,10 +151,15 @@ target_compile_definitions(usermod_papers3 INTERFACE
     -DPAPERS3_BM8563_ADDR=0x51
 )
 
+# ===== 冻结模块配置 =====
+# 添加Papers3 Python模块到冻结模块
+set(MICROPY_FROZEN_MANIFEST ${PAPERS3_DIR}/manifest.py)
+
 # ===== 调试信息 =====
 message(STATUS "Papers3 module configured:")
 message(STATUS "  EPDiy source: ${EPDIY_ROOT}")
 message(STATUS "  Papers3 sources: ${PAPERS3_SOURCES}")
 message(STATUS "  Include paths: ${PAPERS3_INCLUDES}")
 message(STATUS "  Component requirements: ${COMPONENT_REQUIRES}")
+message(STATUS "  Frozen manifest: ${MICROPY_FROZEN_MANIFEST}")
 message(STATUS "  ✅ Ready for build") 

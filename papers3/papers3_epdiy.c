@@ -32,6 +32,9 @@
 #include "lcd_driver.h"  // 关键！包含LCD类型定义
 #include <inttypes.h>
 
+// 中文字体支持 - 24px字体
+#include "chinese_24.h"
+
 
 
 // MicroPython 静态定义
@@ -294,11 +297,8 @@ STATIC mp_obj_t papers3_epdiy_init(mp_obj_t self_in) {
     if (self->initialized) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy already initialized"));
     }
+    epd_init(&papers3_board, &ED047TC2, EPD_LUT_64K);  // 使用1K LUT减少内存占用
     
-    // 1. 初始化EPD硬件 (参考demo工程)
-    epd_init(&papers3_board, &ED047TC2, EPD_LUT_64K);
-    
-    // 2. 初始化高级状态 (参考demo工程)
     self->hl = epd_hl_init(EPD_BUILTIN_WAVEFORM);
     
     self->initialized = true;
@@ -654,7 +654,7 @@ STATIC mp_obj_t papers3_epdiy_fill_triangle(size_t n_args, const mp_obj_t *args)
     return mp_const_none;
 }
 
-// 绘制文字
+// 绘制文字 (中文支持，24px字体)
 STATIC mp_obj_t papers3_epdiy_draw_text(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     
@@ -662,19 +662,27 @@ STATIC mp_obj_t papers3_epdiy_draw_text(size_t n_args, const mp_obj_t *args) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
     }
     
-    if (n_args < 5) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, text, color"));
+    if (n_args != 5) {
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need text, x, y, color"));
     }
     
-    int x = mp_obj_get_int(args[1]);
-    int y = mp_obj_get_int(args[2]);
-    const char* text = mp_obj_str_get_str(args[3]);
+    const char* text = mp_obj_str_get_str(args[1]);
+    int x = mp_obj_get_int(args[2]);
+    int y = mp_obj_get_int(args[3]);
     uint8_t color = mp_obj_get_int(args[4]);
+    
+    ESP_LOGI(TAG, "Drawing text: '%s' at (%d,%d) color=%d", text, x, y, color);
     
     uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
     if (framebuffer == NULL) {
+        ESP_LOGE(TAG, "Failed to get framebuffer");
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
     }
+    
+    // 使用24px中文字体
+    const EpdFont* font = &Chinese24;
+    ESP_LOGI(TAG, "Using font Chinese24: advance_y=%d, ascender=%d, descender=%d", 
+             font->advance_y, font->ascender, font->descender);
     
     // 设置字体属性
     EpdFontProperties props = epd_font_properties_default();
@@ -683,11 +691,64 @@ STATIC mp_obj_t papers3_epdiy_draw_text(size_t n_args, const mp_obj_t *args) {
     props.fallback_glyph = 0;       // 缺失字符的后备字符
     props.flags = EPD_DRAW_BACKGROUND; // 绘制背景
     
-    // TODO: 实现文字绘制功能
-    // 暂时返回错误信息，字体集成问题需要进一步解决
-    mp_raise_msg(&mp_type_NotImplementedError, MP_ERROR_TEXT("Text drawing not yet implemented - font integration needed"));
+    ESP_LOGI(TAG, "Font properties: fg_color=%d, bg_color=%d, flags=%d", 
+             props.fg_color, props.bg_color, props.flags);
+    
+    // 使用选定的字体绘制文本
+    EpdRect area = epd_get_string_rect(font, (char*)text, x, y, 0, &props);
+    ESP_LOGI(TAG, "Text area: x=%d, y=%d, width=%d, height=%d", 
+             area.x, area.y, area.width, area.height);
+    
+    // 检查边界
+    if (x + area.width > PAPERS3_WIDTH || y + area.height > PAPERS3_HEIGHT) {
+        ESP_LOGW(TAG, "Text may be clipped: pos(%d,%d) size(%d,%d) screen(%d,%d)", 
+                 x, y, area.width, area.height, PAPERS3_WIDTH, PAPERS3_HEIGHT);
+    }
+    
+    // 绘制文本
+    int orig_x = x, orig_y = y;
+    enum EpdDrawError err = epd_write_string(font, (char*)text, &x, &y, framebuffer, &props);
+    
+    ESP_LOGI(TAG, "epd_write_string result: error=%d, final_pos=(%d,%d)", err, x, y);
+    
+    if (err != EPD_DRAW_SUCCESS) {
+        ESP_LOGE(TAG, "epd_write_string failed with error %d for text '%s' at (%d,%d)", 
+                 err, text, orig_x, orig_y);
+        
+        // 提供更详细的错误信息
+        switch (err) {
+            case EPD_DRAW_LOOKUP_NOT_IMPLEMENTED:
+                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Font glyph lookup not implemented"));
+                break;
+            case EPD_DRAW_GLYPH_FALLBACK_FAILED:
+                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Font fallback glyph failed"));
+                break;
+            case EPD_DRAW_STRING_INVALID:
+                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Invalid string"));
+                break;
+            case EPD_DRAW_NO_DRAWABLE_CHARACTERS:
+                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("No drawable characters"));
+                break;
+            case EPD_DRAW_FAILED_ALLOC:
+                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Memory allocation failed"));
+                break;
+            case EPD_DRAW_INVALID_FONT_FLAGS:
+                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Invalid font flags"));
+                break;
+            default:
+                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to draw text - unknown error"));
+                break;
+        }
+    }
+    
+    ESP_LOGI(TAG, "Successfully drew text '%s' at (%d,%d) with color 0x%02X", text, orig_x, orig_y, color);
     
     return mp_const_none;
+}
+
+// 添加简便的update方法（别名）
+STATIC mp_obj_t papers3_epdiy_update(mp_obj_t self_in) {
+    return papers3_epdiy_update_screen(1, &self_in);
 }
 
 // ===== MicroPython 方法表和对象定义 =====
@@ -697,6 +758,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_deinit_obj, papers3_epdiy_deinit)
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_get_framebuffer_obj, papers3_epdiy_get_framebuffer);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_update_screen_obj, 1, 2, papers3_epdiy_update_screen);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_update_area_obj, 5, 6, papers3_epdiy_update_area);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_update_obj, papers3_epdiy_update);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_clear_obj, papers3_epdiy_clear);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_get_width_obj, papers3_epdiy_get_width);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_get_height_obj, papers3_epdiy_get_height);
@@ -724,6 +786,7 @@ STATIC const mp_rom_map_elem_t papers3_epdiy_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_get_framebuffer), MP_ROM_PTR(&papers3_epdiy_get_framebuffer_obj) },
     { MP_ROM_QSTR(MP_QSTR_update_screen), MP_ROM_PTR(&papers3_epdiy_update_screen_obj) },
     { MP_ROM_QSTR(MP_QSTR_update_area), MP_ROM_PTR(&papers3_epdiy_update_area_obj) },
+    { MP_ROM_QSTR(MP_QSTR_update), MP_ROM_PTR(&papers3_epdiy_update_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&papers3_epdiy_clear_obj) },
     
     // 属性访问

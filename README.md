@@ -1,429 +1,425 @@
 # MicroPython Papers3M5 项目
 
-为M5Stack Papers3硬件提供MicroPython支持的完整解决方案。
+[English](README.en.md) | 中文
 
-## 硬件规格
+## 🎯 项目概述
 
-- **主控**: ESP32-S3R8 (双核 240MHz)
-- **存储**: 16MB Flash + 8MB PSRAM  
-- **显示**: 4.7英寸 E-Ink 电子墨水屏 (960x540)
-- **传感器**: BMI270 6轴IMU (加速度计+陀螺仪)
-- **时钟**: BM8563 实时时钟 (RTC)
-- **接口**: I2C, SPI, GPIO, ADC
-- **电源**: 锂电池 + USB-C充电
+本项目为 M5Stack Papers3 开发板提供完整的 MicroPython 支持，包括电子墨水屏、触摸屏、传感器等硬件功能。
 
-## 版本信息
+## 📋 硬件规格
 
-- **MicroPython**: v1.25.0
-- **EPDiy**: main分支 (commit: fe3113a) - 已集成到项目中，修复ESP-IDF v5.4.1编译问题
-- **ESP-IDF**: v5.4.1
-- **固件大小**: 1.8MB (12% Flash使用率)
+- **主控**: ESP32-S3R8 (16MB Flash + 8MB PSRAM)
+- **显示屏**: 4.7" 电子墨水屏 960×540，16级灰度
+- **触摸屏**: GT911电容式触摸面板 (I2C)
+- **传感器**: BMI270 陀螺仪 (I2C地址: 0x68)
+- **RTC**: BM8563实时时钟 (I2C地址: 0x51)
+- **音响**: GPIO 21 无源蜂鸣器 (PWM控制)
+- **电池**: GPIO 3 电池检测 (ADC1_CHANNEL_2, 1800mAh)
+- **LED**: 板载状态LED
 
-### EPDiy集成说明
+## 🚀 快速开始
 
-EPDiy库已完全集成到项目中，不再作为外部依赖：
-
-- **原始仓库**: https://github.com/vroland/epdiy
-- **集成版本**: main分支 (commit: fe3113a)
-- **修改内容**: 
-  - 清除了原始.git信息，成为项目的组成部分
-  - 针对M5Stack Papers3硬件进行了适配修改
-  - 修复了ESP-IDF v5.4.1的编译兼容性问题
-  - 实现了MicroPython接口封装
-- **集成原因**: 
-  - 避免外部依赖管理复杂性
-  - 便于针对Papers3硬件进行定制修改
-  - 确保版本一致性和构建稳定性
-
-## 已实现功能
-
-### ✅ 核心系统
-- [x] 系统信息查询 (`papers3.info()`)
-- [x] 内存和Flash状态监控
-- [x] ESP32-S3硬件特性支持
-
-### ✅ E-Ink显示 (EPDiy)
-- [x] 显示初始化和清屏 (`papers3.epdiy.init()`, `papers3.epdiy.clear()`)
-- [x] 基础绘图函数 (`draw_pixel`, `draw_line`, `draw_rect`, `fill_rect`)
-- [x] 高级绘图函数 (`draw_circle`, `fill_circle`, `draw_triangle`, `fill_triangle`)
-- [x] 文本绘制 (`papers3.epdiy.draw_text()`)
-- [x] 屏幕更新 (`papers3.epdiy.update()`)
-- [x] 4.7英寸960x540分辨率支持，16级灰度
-
-### ✅ PWM蜂鸣器
-- [x] 蜂鸣器初始化 (`papers3.buzzer.init()`)
-- [x] 音调播放 (`papers3.buzzer.beep(frequency, duration)`)
-- [x] 频率范围：100Hz - 10kHz
-
-### ✅ 电池监控
-- [x] 电池初始化 (`papers3.battery.init()`)
-- [x] 电压读取 (`papers3.battery.voltage()`)
-- [x] 状态查询 (`papers3.battery.status()`)
-- [x] ADC精度：12位，范围0-3.3V
-
-### ✅ BMI270 陀螺仪传感器
-- [x] 6轴IMU支持 (3轴加速度计 + 3轴陀螺仪)
-- [x] 传感器初始化 (`gyro = papers3.Gyro(); gyro.init()`)
-- [x] 加速度读取 (`gyro.read_accel()`) - 单位：g (重力加速度)
-- [x] 陀螺仪读取 (`gyro.read_gyro()`) - 单位：dps (度/秒)
-- [x] 测量范围：±4G (加速度), ±2000dps (陀螺仪)
-- [x] 采样频率：100Hz
-- [x] I2C地址：0x68
-
-### ✅ BM8563 实时时钟 (RTC)
-- [x] 实时时钟功能
-- [x] RTC初始化 (`rtc = papers3.RTC(); rtc.init()`)
-- [x] 时间读取 (`rtc.datetime()`) - 格式：(年, 月, 日, 星期, 时, 分, 秒)
-- [x] 时间设置 (`rtc.datetime(year, month, day, weekday, hour, minute, second)`)
-- [x] 闹钟功能 (`rtc.alarm(hour, minute)`)
-- [x] I2C地址：0x51
-
-### 🔆 LED模块 - papers3.LED()
-- [x] LED控制功能
-- [x] LED初始化 (`led = papers3.LED(); led.init()`)
-- [x] 开关控制 (`led.on()`, `led.off()`, `led.toggle()`)
-- [x] 状态设置和读取 (`led.set(state)`, `led.state()`)
-- [x] GPIO 0控制
-
-### 👆 Touch模块 - papers3.Touch()
-- [x] GT911电容式触摸屏支持
-- [x] 触摸初始化 (`touch = papers3.Touch(); touch.init()`)
-- [x] 设备地址自动检测 (0x14/0x5D)
-- [x] 中断触发检测 (`touch.available()`)
-- [x] 触摸数据更新 (`touch.update()`)
-- [x] 多点触摸支持 (最多2点)
-- [x] 坐标获取 (`touch.get_point(index)`)
-- [x] I2C配置：SDA=41, SCL=42, INT=48
-- [x] 参考Arduino实现，修复初始化时序问题
-
-## 快速开始
-
-### 1. 编译固件
+### 1. 环境准备
 
 ```bash
 # 克隆项目
 git clone <repository-url>
 cd micropython-papers3m5
 
-# 准备环境（仅初次使用需要）
+# 准备开发环境
 ./scripts/prepare.sh
+```
 
-# 编译固件
+### 2. 编译固件
+
+```bash
+# 编译 MicroPython 固件
 ./scripts/build.sh
 ```
 
-### 2. 烧写固件
+### 3. 烧写固件
 
 ```bash
-# 清空Flash
-esptool.py erase_flash
-
-# 烧写固件
-esptool.py write_flash -z 0x0 build/firmware.bin
+# 使用智能烧写脚本
+./scripts/flash.sh -e
 ```
 
-### 3. 基础测试
+### 4. 基础测试
 
 ```python
 import papers3
 
-# 系统信息
-papers3.info()
+# 创建测试实例
+test = papers3.test()
 
-# E-Ink显示测试
-epd = papers3.EPDiy()
-epd.init()
-epd.clear()
-epd.draw_rect(50, 50, 200, 100, 0x00)  # 绘制矩形
-epd.update_screen()
+# 查看帮助
+test.help()
 
-# 蜂鸣器测试
+# 初始化硬件
+test.init()
+
+# 运行基础测试
+test.basic()
+```
+
+## 🖼️ 显示功能详解
+
+### 多字体大小支持
+
+Papers3 支持中文字体显示：
+
+- **70px行高** - 中文字体(生成参数24px)，支持7000+常用汉字
+  - 字体度量：ascender=53px, descender=-17px, advance_y=70px  
+  - 实际显示高度：70px，推荐行间距：70px
+
+### 文字绘制API
+
+```python
+import papers3
+
+# 初始化显示器
+epdiy = papers3.EPDiy()
+epdiy.init()
+
+# 绘制中文文字
+epdiy.draw_text("中文文本", 10, 50, 0)              # 中文字体(行高70px)
+epdiy.draw_text("English Text", 10, 100, 0)        # 同样支持英文
+
+# 更新显示
+epdiy.update()
+```
+
+### 完整显示API
+
+```python
+# 基础图形绘制
+epdiy.clear()                                    # 清屏
+epdiy.draw_rect(x, y, width, height, color)      # 绘制矩形
+epdiy.fill_rect(x, y, width, height, color)      # 填充矩形
+epdiy.draw_circle(x, y, radius, color)           # 绘制圆形
+epdiy.fill_circle(x, y, radius, color)           # 填充圆形
+epdiy.draw_line(x1, y1, x2, y2, color)           # 绘制直线
+epdiy.draw_triangle(x1, y1, x2, y2, x3, y3, color)  # 绘制三角形
+epdiy.fill_triangle(x1, y1, x2, y2, x3, y3, color)  # 填充三角形
+
+# 文字绘制 (支持中文)
+epdiy.draw_text(text, x, y, color)               # 中文字体 (实际高度70px，行间距70px)
+
+# 显示更新
+epdiy.update()                                   # 更新屏幕显示
+epdiy.clear_screen()                             # 清除并更新
+```
+
+## 🔧 硬件模块API
+
+### 蜂鸣器控制
+
+```python
+# 初始化蜂鸣器
 buzzer = papers3.Buzzer()
 buzzer.init()
-buzzer.beep(1000, 500)  # 1kHz, 500ms
-buzzer.deinit()
 
-# 电池状态
+# 播放声音
+buzzer.beep(frequency, duration)  # 频率(Hz), 持续时间(ms)
+buzzer.beep(1000, 500)           # 1kHz音调持续500ms
+
+# 清理资源
+buzzer.deinit()
+```
+
+### 电池监控
+
+```python
+# 初始化电池监控
 battery = papers3.Battery()
 battery.init()
-print("电池电压:", battery.voltage(), "mV")
-print("电池电量:", battery.percentage(), "%")
+
+# 读取电池信息
+voltage = battery.voltage()      # 电压(mV)
+percentage = battery.percentage() # 电量百分比
+
+print(f"电池电压: {voltage} mV")
+print(f"电池电量: {percentage}%")
+
+# 清理资源
 battery.deinit()
 ```
 
-### 4. 传感器测试
+### 陀螺仪传感器
 
 ```python
-# BMI270陀螺仪测试
+# 初始化陀螺仪
 gyro = papers3.Gyro()
 gyro.init()
-print('加速度 (g):', gyro.read_accel())    # 例：(-0.002, -0.003, -0.990)
-print('陀螺仪 (dps):', gyro.read_gyro())   # 例：(-0.305, -0.183, 0.183)
 
-# BM8563 RTC测试
+# 读取传感器数据
+accel = gyro.read_accel()  # 加速度计 [x, y, z]
+gyro_data = gyro.read_gyro()  # 陀螺仪 [x, y, z]
+
+print(f"加速度: {accel}")
+print(f"陀螺仪: {gyro_data}")
+
+# 清理资源
+gyro.deinit()
+```
+
+### 实时时钟 (RTC)
+
+```python
+# 初始化RTC
 rtc = papers3.RTC()
 rtc.init()
-print('当前时间:', rtc.datetime())          # 例：(29, 1, 5, 5, 12, 7, 34)
-rtc.datetime(2025, 1, 25, 0, 14, 30, 0)    # 设置时间
-rtc.alarm(8, 30)                           # 设置8:30闹钟
+
+# 读取时间
+current_time = rtc.datetime()
+print(f"当前时间: {current_time}")
+
+# 设置时间 (年, 月, 日, 星期, 时, 分, 秒)
+rtc.set_datetime(2024, 12, 25, 3, 10, 30, 0)
+
+# 清理资源
+rtc.deinit()
 ```
 
-### 5. 新增硬件测试
+### 触摸屏
 
 ```python
-# LED控制测试 (修正逻辑：低电平点亮)
+# 初始化触摸屏
+touch = papers3.Touch()
+touch.init()
+
+# 读取触摸数据
+touch.update()                    # 更新触摸数据
+num_touches = touch.get_touches() # 获取触摸点数量
+
+for i in range(num_touches):
+    point = touch.get_point(i)    # 获取触摸点 [x, y, size]
+    x, y, size = point
+    print(f"触摸点 {i}: X={x}, Y={y}, Size={size}")
+
+# 清理资源
+touch.deinit()
+```
+
+### LED控制
+
+```python
+# 初始化LED
 led = papers3.LED()
 led.init()
-led.on()                                   # 打开LED (GPIO 0 = 低电平)
-time.sleep(1)
-led.off()                                  # 关闭LED (GPIO 0 = 高电平)
-led.toggle()                               # 切换状态
-print('LED状态:', led.state())              # 获取状态
 
-# GT911触摸屏测试 (已修复"GT911 not found"问题)
-touch = papers3.Touch()
-touch.init()                               # 使用Arduino兼容的初始化方式
-print("GT911触摸屏已就绪，请触摸屏幕...")
-while True:
-    if touch.available():                  # 检查中断触发
-        touch.update()                     # 更新触摸数据
-        num = touch.get_touches()
-        if num > 0:
-            point = touch.get_point(0)
-            print(f'触摸点: x={point[0]}, y={point[1]}, size={point[2]}, id={point[3]}')
-        else:
-            print("手指抬起")
-    time.sleep_ms(50)
+# 控制LED
+led.on()   # 点亮
+led.off()  # 熄灭
+
+# 清理资源
+led.deinit()
 ```
 
-## API 参考
+## 🎮 完整测试框架
 
-### 系统模块
+### 测试命令概览
 
 ```python
-papers3.info()                    # 显示系统信息
+import papers3
+test = papers3.test()
+
+# 基础功能
+test.help()           # 显示帮助信息
+test.init()           # 初始化所有硬件
+test.basic()          # 运行基础硬件测试
+test.system_info()    # 显示系统信息
+
+# 硬件模块测试
+test.buzzer_test()    # 蜂鸣器测试
+test.battery_test()   # 电池监控测试
+test.led_test()       # LED测试
+test.gyro_test()      # 陀螺仪测试
+test.rtc_test()       # RTC测试
+test.touch_test()     # 触摸屏测试
+
+# 显示功能测试
+test.simple_chinese() # 简单中文显示测试
+test.display_test()   # 基础显示测试
+test.chinese()        # 中文字体测试
+test.complex_display() # 复杂显示测试（系统状态）
+test.touch_paint()    # 触摸绘图测试
+
+# 演示和清理
+test.demo()           # 演示模式
+test.cleanup()        # 清理所有资源
 ```
 
-### EPDiy显示模块
+### 字体显示测试
 
 ```python
-# 创建EPDiy显示对象
-epd = papers3.EPDiy()
+# 简单中文测试 - 使用小字体
+test.simple_chinese()
 
-# 基础操作
-epd.init()                        # 初始化显示
-epd.clear()                       # 清屏
-epd.update_screen()              # 更新整屏显示
+# 复杂显示测试 - 展示系统状态信息
+test.complex_display()
 
-# 基础绘图函数
-epd.draw_pixel(x, y, color)      # 绘制像素
-epd.draw_line(x0, y0, x1, y1, color)  # 绘制直线
-epd.draw_rect(x, y, w, h, color)      # 绘制矩形
-epd.fill_rect(x, y, w, h, color)      # 填充矩形
+# 手动测试中文字体
+epdiy = papers3.EPDiy()
+epdiy.init()
+epdiy.clear()
 
-# 高级绘图函数
-epd.draw_circle(x, y, r, color)       # 绘制圆形
-epd.fill_circle(x, y, r, color)       # 填充圆形
-epd.draw_triangle(x0, y0, x1, y1, x2, y2, color)  # 绘制三角形
-epd.fill_triangle(x0, y0, x1, y1, x2, y2, color)  # 填充三角形
+# 显示中英文对比 (注意70px行间距)
+epdiy.draw_text("中文字体 Chinese Font", 50, 100, 0)
+epdiy.draw_text("English Font Display", 50, 170, 0)  # 100+70=170
 
-# 文本绘制（需要字体集成）
-# epd.draw_text(x, y, text, color)    # 待完善
-
-# 属性访问
-print(f"分辨率: {epd.width()} x {epd.height()}")
-epd.set_temperature(25)              # 设置温度补偿
+epdiy.update()
 ```
 
-### 蜂鸣器模块
+## 🏗️ 项目架构
+
+```
+micropython-papers3m5/
+├── micropython/         # MicroPython v1.25.0 (自动克隆)
+├── epdiy/              # EPDiy 电子墨水屏库
+├── papers3/            # Papers3 MicroPython 模块
+│   ├── modpapers3.c    # 主模块入口
+│   ├── papers3_epdiy.c # 显示器支持 (多字体)
+│   ├── papers3_buzzer.c # 蜂鸣器
+│   ├── papers3_battery.c # 电池监控
+│   ├── papers3_gyro.c  # 陀螺仪
+│   ├── papers3_rtc.c   # 实时时钟
+│   ├── papers3_touch.c # 触摸屏
+│   ├── papers3_led.c   # LED控制
+│   ├── chinese_24.h    # 中文字体(生成参数24px, 实际行高70px)
+│   └── test.py         # 测试框架
+├── scripts/            # 构建脚本
+│   ├── prepare.sh      # 环境准备
+│   ├── build.sh        # 固件编译
+│   ├── flash.sh        # 智能烧写
+│   └── generate_chinese_font.py # 字体生成工具
+└── build/              # 编译输出
+```
+
+## 📊 系统信息
 
 ```python
-# 创建蜂鸣器对象
-buzzer = papers3.Buzzer()
-
-buzzer.init()                     # 初始化蜂鸣器
-buzzer.beep(freq, duration)       # 播放音调
-buzzer.deinit()                   # 释放资源
+# 查看系统信息
+papers3.info()        # 基础系统信息
+papers3.flash_info()  # Flash 使用情况
+papers3.ram_info()    # RAM 状态信息
 ```
 
-### 电池模块
+**当前固件规格:**
+- **固件大小**: 5.0MB (占用8MB分区的62%)
+- **Flash配置**: 16MB (8MB App + 8MB VFS)
+- **RAM配置**: 8MB PSRAM + 512KB 内部RAM
+- **字体支持**: 中文字体(行高70px) × 7000+汉字
+
+## 🔄 开发工作流
+
+### 1. 修改代码后重新编译
+
+```bash
+# 快速编译和烧写
+./scripts/build.sh && ./scripts/flash.sh -e
+```
+
+### 2. 串口调试
+
+```bash
+# macOS/Linux
+screen /dev/cu.usbserial-* 115200
+
+# 或使用 minicom
+minicom -b 115200 -D /dev/cu.usbserial-*
+```
+
+### 3. 字体管理
+
+```bash
+# 生成新字体 (需要先安装 freetype-py)
+cd scripts
+python3 generate_chinese_font.py --size 20 --output ../papers3
+
+# 在 papers3_epdiy.c 中添加新字体支持
+# 然后重新编译
+```
+
+## 🎨 界面设计建议
+
+### 字体特点
+
+- **完整中文支持**: 包含7000+常用汉字
+- **清晰显示**: 24px大小适合4.7寸屏幕阅读
+- **双语支持**: 中英文混合显示效果良好
+
+### 排版建议
 
 ```python
-# 创建电池监控对象
-battery = papers3.Battery()
+# 标题区域
+epdiy.draw_text("Papers3 应用", 20, 30, 0)
 
-battery.init()                    # 初始化电池监控
-voltage = battery.voltage()       # 读取电压 (mV)
-percentage = battery.percentage() # 获取电量百分比
-raw_adc = battery.adc_raw()       # 获取原始ADC值
-battery.deinit()                  # 释放资源
+# 主要内容
+epdiy.draw_text("这是主要内容区域", 20, 80, 0)
+
+# 状态信息
+epdiy.draw_text("状态: 就绪", 20, 500, 8)
 ```
 
-### BMI270陀螺仪模块
-
-```python
-gyro = papers3.Gyro()             # 创建陀螺仪对象
-gyro.init()                       # 初始化传感器
-gyro.read_accel()                 # 读取加速度 (x, y, z) 单位：g
-gyro.read_gyro()                  # 读取陀螺仪 (x, y, z) 单位：dps
-```
-
-### BM8563 RTC模块
-
-```python
-rtc = papers3.RTC()               # 创建RTC对象
-rtc.init()                        # 初始化RTC
-rtc.datetime()                    # 读取时间 (年,月,日,星期,时,分,秒)
-rtc.datetime(year, month, day, weekday, hour, minute, second)  # 设置时间
-rtc.alarm(hour, minute)           # 设置闹钟
-```
-
-### LED模块
-
-```python
-# 创建LED对象
-led = papers3.LED()
-
-led.init()                        # 初始化LED
-led.on()                          # 打开LED
-led.off()                         # 关闭LED
-led.toggle()                      # 切换LED状态
-led.set(True/False)               # 设置LED状态
-state = led.state()               # 获取LED状态
-led.deinit()                      # 释放资源
-```
-
-
-
-### Touch模块
-
-```python
-# 创建触摸屏对象
-touch = papers3.Touch()
-
-touch.init()                      # 初始化GT911触摸屏
-available = touch.available()     # 检查是否有新的触摸数据
-touch.update()                    # 更新触摸数据
-num_touches = touch.get_touches() # 获取当前触摸点数量
-point = touch.get_point(0)        # 获取第0个触摸点 (x, y, size, id)
-touch.flush()                     # 清除触摸状态
-touch.deinit()                    # 释放资源
-```
-
-## 技术架构
-
-### I2C总线配置
-- **SDA引脚**: GPIO 41
-- **SCL引脚**: GPIO 42  
-- **频率**: 100kHz
-- **驱动**: ESP-IDF I2C驱动 (避免MicroPython machine模块冲突)
-- **共享设备**: BMI270 (0x68), BM8563 (0x51), GT911 (0x14/0x5D)
-- **冲突解决**: 统一I2C初始化机制，避免重复驱动安装
-
-### 构建系统
-- EPDiy库已完全集成，避免外部依赖
-- 支持增量编译和清理构建
-- 自动环境检测和依赖管理
-- MicroPython仍使用符号链接保持完整性
-
-### 内存管理
-- Flash使用率：19% (1.6MB/8.5MB可用)
-- PSRAM支持：8MB外部PSRAM
-- 堆内存优化：支持大型应用
-
-## 开发进度
-
-- [x] **阶段1**: 基础系统支持 (EPDiy, 蜂鸣器, 电池)
-- [x] **阶段2**: 传感器集成 (BMI270陀螺仪, BM8563 RTC)
-- [x] **阶段3**: 硬件控制 (LED, GT911触摸屏)
-- [x] **阶段4**: I2C冲突解决和Arduino兼容性
-- [ ] **阶段5**: SD卡存储支持
-- [ ] **阶段6**: WiFi和网络功能
-- [ ] **阶段7**: 高级应用示例
-
-## 测试验证
-
-### 硬件测试结果 ✅
-
-**BMI270陀螺仪**：
-- 加速度计：正常读取重力数据 (-0.002, -0.003, -0.990)g
-- 陀螺仪：正常读取角速度数据 (-0.305, -0.183, 0.183)dps
-- I2C通信：稳定，无错误
-
-**BM8563 RTC**：
-- 时间读取：正常 (29, 1, 5, 5, 12, 7, 34)
-- 时间设置：支持
-- I2C通信：稳定，无错误
-
-**GT911触摸屏**：
-- 设备检测：正常，自动识别地址0x14或0x5D
-- 触摸响应：正常，支持多点触摸(最多2点)
-- 中断机制：稳定，FALLING edge触发
-- I2C通信：稳定，与其他设备无冲突
-
-**LED控制**：
-- GPIO 0控制：正常
-- 逻辑修正：低电平点亮，高电平熄灭
-- 状态管理：支持on/off/toggle操作
-
-**系统稳定性**：
-- 启动时间：< 3秒
-- 内存使用：正常
-- I2C冲突：已解决，共享机制稳定
-- 无崩溃或重启问题
-
-## 故障排除
+## 🛠️ 故障排除
 
 ### 常见问题
 
-1. **编译失败**
-   - 检查ESP-IDF版本 (需要v5.4.1)
-   - 确认子模块已正确初始化
-   - 清理构建缓存：`./scripts/clean.sh`
+1. **编译失败 - 分区不足**
+   ```
+   Error: app partition is too small
+   ```
+   解决: 已更新分区配置支持12MB App分区
 
-2. **I2C通信错误**
-   - 确认硬件连接正确
-   - 检查I2C引脚配置 (SDA=41, SCL=42)
-   - 验证传感器电源供应
+2. **触摸不响应**
+   ```python
+   # 确保先调用 update()
+   touch.update()
+   num_touches = touch.get_touches()
+   ```
 
-3. **显示问题**
-   - 确认EPDiy库版本匹配
-   - 检查显示屏连接
-   - 尝试重新初始化：`papers3.epdiy.init()`
+3. **字体显示重叠**
+   ```python
+   # 使用合适的字体大小和行间距
+   epdiy.draw_text("文本1", 50, 100, 0, "small")  # 16px
+   epdiy.draw_text("文本2", 50, 125, 0, "small")  # 25px间距
+   ```
 
-4. **触摸屏"GT911 not found"错误**
-   - 检查I2C引脚连接 (SDA=41, SCL=42)
-   - 确认中断引脚连接 (INT=48)
-   - 验证设备上电时序和延时
-   - 尝试重新初始化：`touch.deinit(); touch.init()`
+4. **内存不足**
+   ```python
+   # 查看内存状态
+   papers3.ram_info()
+   
+   # 及时清理资源
+   test.cleanup()
+   ```
 
-5. **LED逻辑反向**
-   - Papers3硬件使用低电平点亮
-   - `led.on()` = GPIO 0低电平 = LED亮
-   - `led.off()` = GPIO 0高电平 = LED灭
+## 📈 性能优化
 
-## 贡献指南
+- **固件大小**: 7.1MB（包含2套完整中文字体）
+- **启动时间**: ~3秒完成硬件初始化
+- **显示更新**: ~800ms 全屏刷新
+- **内存使用**: 280KB 内部RAM，2MB PSRAM可用
 
-1. Fork项目仓库
-2. 创建功能分支：`git checkout -b feature/new-feature`
-3. 提交更改：`git commit -m "Add new feature"`
-4. 推送分支：`git push origin feature/new-feature`
-5. 创建Pull Request
+## 🤝 贡献指南
 
-## 许可证
+1. Fork 项目仓库
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
 
-本项目采用MIT许可证 - 详见 [LICENSE](LICENSE) 文件。
+## 📄 许可证
 
-## 🏆 项目状态
+本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
 
-✅ **已完成**: EPDiy完全集成，绘图功能完善，面向对象架构，构建系统，文档完善，硬件控制完整，I2C冲突解决
-🚀 **可投产**: 固件编译成功，核心功能验证通过，开发工具链完整，EPDiy库完全集成，Arduino兼容性
-🎯 **EPDiy状态**: main分支 (commit: fe3113a) 完全集成到项目中，支持完整2D绘图功能
-💡 **硬件支持**: LED控制(逻辑修正)、GT911触摸屏(Arduino兼容)、BMI270陀螺仪、BM8563 RTC全部就绪，I2C共享稳定
+## 🙏 致谢
 
-## 致谢
+- [MicroPython](https://micropython.org/) - Python 微控制器实现
+- [EPDiy](https://github.com/vroland/epdiy) - 电子墨水屏驱动库
+- [M5Stack](https://m5stack.com/) - Papers3 硬件平台
 
-- [MicroPython](https://micropython.org/) - Python 3解释器
-- [EPDiy](https://github.com/vroland/epdiy) - E-Ink显示驱动
-- [ESP-IDF](https://github.com/espressif/esp-idf) - ESP32开发框架
-- [M5Stack](https://m5stack.com/) - Papers3硬件平台
+---
+
+**Happy Coding! 🚀**

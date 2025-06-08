@@ -125,16 +125,27 @@ if [ -f "build-PAPERS3/firmware.bin" ]; then
     
     # 显示烧写命令
     echo "=== Flash Commands ==="
-    echo "清空Flash:"
+    echo "清空Flash (自动检测端口):"
     echo "esptool.py erase_flash"
     echo ""
-    echo "烧写固件:"
-    echo "esptool.py write_flash -z 0x0 $BUILD_DIR/firmware.bin"
+    echo "清空Flash (指定端口):"
+    echo "esptool.py --port /dev/ttyUSB0 erase_flash"
     echo ""
-    echo "或者使用完整烧写:"
+    echo "烧写固件 (高速921600波特率，自动检测端口):"
+    echo "esptool.py --baud 921600 write_flash --compress 0x0 $BUILD_DIR/firmware.bin"
+    echo ""
+    echo "烧写固件 (指定端口):"
+    echo "esptool.py --port /dev/ttyUSB0 --baud 921600 write_flash --compress 0x0 $BUILD_DIR/firmware.bin"
+    echo ""
+    echo "或者使用完整烧写 (高速):"
     if [ -f "$BUILD_DIR/bootloader.bin" ] && [ -f "$BUILD_DIR/partition-table.bin" ]; then
-        echo "esptool.py write_flash 0x0 $BUILD_DIR/bootloader.bin 0x8000 $BUILD_DIR/partition-table.bin 0x10000 $BUILD_DIR/firmware.bin"
+        echo "esptool.py --baud 921600 write_flash 0x0 $BUILD_DIR/bootloader.bin 0x8000 $BUILD_DIR/partition-table.bin 0x10000 $BUILD_DIR/firmware.bin"
     fi
+    echo ""
+    echo "常见端口示例:"
+    echo "  macOS:   /dev/cu.usbserial-* 或 /dev/cu.SLAB_USBtoUART"
+    echo "  Linux:   /dev/ttyUSB0 或 /dev/ttyACM0"
+    echo "  Windows: COM3, COM4, COM5 等"
     echo ""
     
 
