@@ -129,7 +129,7 @@ buzzer.deinit()
 battery = papers3.Battery()
 battery.init()
 print("电池电压:", battery.voltage(), "mV")
-print("电池状态:", battery.status())
+print("电池电量:", battery.percentage(), "%")
 battery.deinit()
 ```
 
@@ -208,7 +208,8 @@ battery = papers3.Battery()
 
 battery.init()                    # 初始化电池监控
 voltage = battery.voltage()       # 读取电压 (mV)
-status = battery.status()         # 获取状态信息
+percentage = battery.percentage() # 获取电量百分比
+raw_adc = battery.adc_raw()       # 获取原始ADC值
 battery.deinit()                  # 释放资源
 ```
 
