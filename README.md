@@ -78,6 +78,29 @@ EPDiy库已完全集成到项目中，不再作为外部依赖：
 - [x] 闹钟功能 (`rtc.alarm(hour, minute)`)
 - [x] I2C地址：0x51
 
+### 🔆 LED模块 - papers3.LED()
+- [x] LED控制功能
+- [x] LED初始化 (`led = papers3.LED(); led.init()`)
+- [x] 开关控制 (`led.on()`, `led.off()`, `led.toggle()`)
+- [x] 状态设置和读取 (`led.set(state)`, `led.state()`)
+- [x] GPIO 0控制
+
+### 🔘 Button模块 - papers3.Button()
+- [x] 充电和USB状态检测
+- [x] 按钮初始化 (`button = papers3.Button(); button.init()`)
+- [x] 充电状态检测 (`button.charge_state()`) - GPIO 4
+- [x] USB连接检测 (`button.usb_connected()`) - GPIO 5
+- [x] 状态字典 (`button.status()`)
+
+### 👆 Touch模块 - papers3.Touch()
+- [x] GT911电容式触摸屏
+- [x] 触摸初始化 (`touch = papers3.Touch(); touch.init()`)
+- [x] 中断触发检测 (`touch.available()`)
+- [x] 触摸数据更新 (`touch.update()`)
+- [x] 多点触摸支持 (最多2点)
+- [x] 坐标获取 (`touch.get_point(index)`)
+- [x] I2C配置：SDA=41, SCL=42, INT=48
+
 ## 快速开始
 
 ### 1. 编译固件
@@ -148,6 +171,38 @@ rtc.init()
 print('当前时间:', rtc.datetime())          # 例：(29, 1, 5, 5, 12, 7, 34)
 rtc.datetime(2025, 1, 25, 0, 14, 30, 0)    # 设置时间
 rtc.alarm(8, 30)                           # 设置8:30闹钟
+```
+
+### 5. 新增硬件测试
+
+```python
+# LED控制测试
+led = papers3.LED()
+led.init()
+led.on()                                   # 打开LED
+time.sleep(1)
+led.off()                                  # 关闭LED
+led.toggle()                               # 切换状态
+print('LED状态:', led.state())              # 获取状态
+
+# 按钮状态测试
+button = papers3.Button()
+button.init()
+print('充电状态:', button.charge_state())   # True: 充满, False: 充电中
+print('USB连接:', button.usb_connected())  # True: 已连接
+print('状态信息:', button.status())         # 字典格式
+
+# GT911触摸屏测试
+touch = papers3.Touch()
+touch.init()
+while True:
+    if touch.available():
+        touch.update()
+        num = touch.get_touches()
+        if num > 0:
+            point = touch.get_point(0)
+            print(f'触摸点: x={point[0]}, y={point[1]}, size={point[2]}')
+    time.sleep_ms(50)
 ```
 
 ## API 参考
@@ -232,6 +287,49 @@ rtc.datetime(year, month, day, weekday, hour, minute, second)  # 设置时间
 rtc.alarm(hour, minute)           # 设置闹钟
 ```
 
+### LED模块
+
+```python
+# 创建LED对象
+led = papers3.LED()
+
+led.init()                        # 初始化LED
+led.on()                          # 打开LED
+led.off()                         # 关闭LED
+led.toggle()                      # 切换LED状态
+led.set(True/False)               # 设置LED状态
+state = led.state()               # 获取LED状态
+led.deinit()                      # 释放资源
+```
+
+### Button模块
+
+```python
+# 创建按钮对象
+button = papers3.Button()
+
+button.init()                     # 初始化按钮
+charge_full = button.charge_state()    # 充电状态 (True: 充满, False: 充电中)
+usb_connected = button.usb_connected() # USB连接状态 (True: 已连接)
+status = button.status()          # 获取所有状态字典
+button.deinit()                   # 释放资源
+```
+
+### Touch模块
+
+```python
+# 创建触摸屏对象
+touch = papers3.Touch()
+
+touch.init()                      # 初始化GT911触摸屏
+available = touch.available()     # 检查是否有新的触摸数据
+touch.update()                    # 更新触摸数据
+num_touches = touch.get_touches() # 获取当前触摸点数量
+point = touch.get_point(0)        # 获取第0个触摸点 (x, y, size, id)
+touch.flush()                     # 清除触摸状态
+touch.deinit()                    # 释放资源
+```
+
 ## 技术架构
 
 ### I2C总线配置
@@ -255,9 +353,10 @@ rtc.alarm(hour, minute)           # 设置闹钟
 
 - [x] **阶段1**: 基础系统支持 (EPDiy, 蜂鸣器, 电池)
 - [x] **阶段2**: 传感器集成 (BMI270陀螺仪, BM8563 RTC)
-- [ ] **阶段3**: SD卡存储支持
-- [ ] **阶段4**: WiFi和网络功能
-- [ ] **阶段5**: 高级应用示例
+- [x] **阶段3**: 硬件控制 (LED, Button, GT911触摸屏)
+- [ ] **阶段4**: SD卡存储支持
+- [ ] **阶段5**: WiFi和网络功能
+- [ ] **阶段6**: 高级应用示例
 
 ## 测试验证
 
@@ -311,9 +410,10 @@ rtc.alarm(hour, minute)           # 设置闹钟
 
 ## 🏆 项目状态
 
-✅ **已完成**: EPDiy完全集成，绘图功能完善，面向对象架构，构建系统，文档完善
+✅ **已完成**: EPDiy完全集成，绘图功能完善，面向对象架构，构建系统，文档完善，硬件控制完整
 🚀 **可投产**: 固件编译成功，核心功能验证通过，开发工具链完整，EPDiy库完全集成
 🎯 **EPDiy状态**: main分支 (commit: fe3113a) 完全集成到项目中，支持完整2D绘图功能
+💡 **硬件支持**: LED控制、按钮检测、GT911触摸屏、BMI270陀螺仪、BM8563 RTC全部就绪
 
 ## 致谢
 

@@ -52,6 +52,9 @@ set(PAPERS3_SOURCES
     ${PAPERS3_DIR}/papers3_gyro.c
     ${PAPERS3_DIR}/papers3_rtc.c
     ${PAPERS3_DIR}/papers3_epdiy.c
+    ${PAPERS3_DIR}/papers3_led.c
+    ${PAPERS3_DIR}/papers3_button.c
+    ${PAPERS3_DIR}/papers3_touch.c
 )
 
 # 包含目录

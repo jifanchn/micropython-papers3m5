@@ -19,6 +19,9 @@ extern const mp_obj_type_t papers3_battery_type;
 extern const mp_obj_type_t papers3_gyro_type;
 extern const mp_obj_type_t papers3_rtc_type;
 extern const mp_obj_type_t papers3_epdiy_type;
+extern const mp_obj_type_t papers3_led_type;
+extern const mp_obj_type_t papers3_button_type;
+extern const mp_obj_type_t papers3_touch_type;
 
 // Info function
 static mp_obj_t papers3_info(void) {
@@ -30,6 +33,9 @@ static mp_obj_t papers3_info(void) {
     mp_printf(&mp_plat_print, "  - papers3.Gyro() - BMI270 accelerometer + gyroscope\n");
     mp_printf(&mp_plat_print, "  - papers3.RTC() - BM8563 real-time clock\n");
     mp_printf(&mp_plat_print, "  - papers3.EPDiy() - E-Paper display control (960x540, 16-level grayscale)\n");
+    mp_printf(&mp_plat_print, "  - papers3.LED() - LED control (GPIO 0)\n");
+    mp_printf(&mp_plat_print, "  - papers3.Button() - Button and status detection (GPIO 4, 5)\n");
+    mp_printf(&mp_plat_print, "  - papers3.Touch() - GT911 capacitive touch screen\n");
     mp_printf(&mp_plat_print, "System functions:\n");
     mp_printf(&mp_plat_print, "  - papers3.flash_info() - Flash memory information\n");
     mp_printf(&mp_plat_print, "  - papers3.ram_info() - RAM memory information\n");
@@ -120,6 +126,9 @@ static const mp_rom_map_elem_t papers3_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_Gyro), MP_ROM_PTR(&papers3_gyro_type) },
     { MP_ROM_QSTR(MP_QSTR_RTC), MP_ROM_PTR(&papers3_rtc_type) },
     { MP_ROM_QSTR(MP_QSTR_EPDiy), MP_ROM_PTR(&papers3_epdiy_type) },
+    { MP_ROM_QSTR(MP_QSTR_LED), MP_ROM_PTR(&papers3_led_type) },
+    { MP_ROM_QSTR(MP_QSTR_Button), MP_ROM_PTR(&papers3_button_type) },
+    { MP_ROM_QSTR(MP_QSTR_Touch), MP_ROM_PTR(&papers3_touch_type) },
 };
 
 static MP_DEFINE_CONST_DICT(papers3_globals, papers3_globals_table);
