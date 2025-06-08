@@ -44,7 +44,7 @@ set(EPDIY_SOURCES
     ${EPDIY_ROOT}/src/board/pca9555.c
 )
 
-# Papers3模块源文件 (集成所有功能到单个文件)
+# Papers3模块源文件 (包含Touch模块，移除Button模块)
 set(PAPERS3_SOURCES
     ${PAPERS3_DIR}/modpapers3.c
     ${PAPERS3_DIR}/papers3_buzzer.c
@@ -53,7 +53,6 @@ set(PAPERS3_SOURCES
     ${PAPERS3_DIR}/papers3_rtc.c
     ${PAPERS3_DIR}/papers3_epdiy.c
     ${PAPERS3_DIR}/papers3_led.c
-    ${PAPERS3_DIR}/papers3_button.c
     ${PAPERS3_DIR}/papers3_touch.c
 )
 

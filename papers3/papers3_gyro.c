@@ -75,7 +75,7 @@ static esp_err_t papers3_i2c_init(void) {
     }
     
     g_i2c_initialized = true;
-    ESP_LOGI(TAG, "I2C总线初始化成功");
+    // ESP_LOGI(TAG, "I2C总线初始化成功");  // 移除可能阻塞启动的日志
     return ESP_OK;
 }
 
@@ -124,12 +124,12 @@ static mp_obj_t papers3_gyro_make_new(const mp_obj_type_t *type, size_t n_args, 
 static mp_obj_t papers3_gyro_init(mp_obj_t self_in) {
     papers3_gyro_obj_t *self = MP_OBJ_TO_PTR(self_in);
     
-    ESP_LOGI(TAG, "初始化BMI270陀螺仪");
+    // ESP_LOGI(TAG, "初始化BMI270陀螺仪");  // 移除可能阻塞启动的日志
     
     // 初始化I2C总线
     esp_err_t ret = papers3_i2c_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "I2C初始化失败: %s", esp_err_to_name(ret));
+        // ESP_LOGE(TAG, "I2C初始化失败: %s", esp_err_to_name(ret));  // 移除可能阻塞启动的日志
         mp_raise_OSError(MP_EIO);
     }
     

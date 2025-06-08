@@ -85,21 +85,16 @@ EPDiy库已完全集成到项目中，不再作为外部依赖：
 - [x] 状态设置和读取 (`led.set(state)`, `led.state()`)
 - [x] GPIO 0控制
 
-### 🔘 Button模块 - papers3.Button()
-- [x] 充电和USB状态检测
-- [x] 按钮初始化 (`button = papers3.Button(); button.init()`)
-- [x] 充电状态检测 (`button.charge_state()`) - GPIO 4
-- [x] USB连接检测 (`button.usb_connected()`) - GPIO 5
-- [x] 状态字典 (`button.status()`)
-
 ### 👆 Touch模块 - papers3.Touch()
-- [x] GT911电容式触摸屏
+- [x] GT911电容式触摸屏支持
 - [x] 触摸初始化 (`touch = papers3.Touch(); touch.init()`)
+- [x] 设备地址自动检测 (0x14/0x5D)
 - [x] 中断触发检测 (`touch.available()`)
 - [x] 触摸数据更新 (`touch.update()`)
 - [x] 多点触摸支持 (最多2点)
 - [x] 坐标获取 (`touch.get_point(index)`)
 - [x] I2C配置：SDA=41, SCL=42, INT=48
+- [x] 参考Arduino实现，修复初始化时序问题
 
 ## 快速开始
 
@@ -176,32 +171,28 @@ rtc.alarm(8, 30)                           # 设置8:30闹钟
 ### 5. 新增硬件测试
 
 ```python
-# LED控制测试
+# LED控制测试 (修正逻辑：低电平点亮)
 led = papers3.LED()
 led.init()
-led.on()                                   # 打开LED
+led.on()                                   # 打开LED (GPIO 0 = 低电平)
 time.sleep(1)
-led.off()                                  # 关闭LED
+led.off()                                  # 关闭LED (GPIO 0 = 高电平)
 led.toggle()                               # 切换状态
 print('LED状态:', led.state())              # 获取状态
 
-# 按钮状态测试
-button = papers3.Button()
-button.init()
-print('充电状态:', button.charge_state())   # True: 充满, False: 充电中
-print('USB连接:', button.usb_connected())  # True: 已连接
-print('状态信息:', button.status())         # 字典格式
-
-# GT911触摸屏测试
+# GT911触摸屏测试 (已修复"GT911 not found"问题)
 touch = papers3.Touch()
-touch.init()
+touch.init()                               # 使用Arduino兼容的初始化方式
+print("GT911触摸屏已就绪，请触摸屏幕...")
 while True:
-    if touch.available():
-        touch.update()
+    if touch.available():                  # 检查中断触发
+        touch.update()                     # 更新触摸数据
         num = touch.get_touches()
         if num > 0:
             point = touch.get_point(0)
-            print(f'触摸点: x={point[0]}, y={point[1]}, size={point[2]}')
+            print(f'触摸点: x={point[0]}, y={point[1]}, size={point[2]}, id={point[3]}')
+        else:
+            print("手指抬起")
     time.sleep_ms(50)
 ```
 
@@ -302,18 +293,7 @@ state = led.state()               # 获取LED状态
 led.deinit()                      # 释放资源
 ```
 
-### Button模块
 
-```python
-# 创建按钮对象
-button = papers3.Button()
-
-button.init()                     # 初始化按钮
-charge_full = button.charge_state()    # 充电状态 (True: 充满, False: 充电中)
-usb_connected = button.usb_connected() # USB连接状态 (True: 已连接)
-status = button.status()          # 获取所有状态字典
-button.deinit()                   # 释放资源
-```
 
 ### Touch模块
 
@@ -333,10 +313,12 @@ touch.deinit()                    # 释放资源
 ## 技术架构
 
 ### I2C总线配置
-- **SDA引脚**: GPIO 12
-- **SCL引脚**: GPIO 11  
+- **SDA引脚**: GPIO 41
+- **SCL引脚**: GPIO 42  
 - **频率**: 100kHz
 - **驱动**: ESP-IDF I2C驱动 (避免MicroPython machine模块冲突)
+- **共享设备**: BMI270 (0x68), BM8563 (0x51), GT911 (0x14/0x5D)
+- **冲突解决**: 统一I2C初始化机制，避免重复驱动安装
 
 ### 构建系统
 - EPDiy库已完全集成，避免外部依赖
@@ -353,10 +335,11 @@ touch.deinit()                    # 释放资源
 
 - [x] **阶段1**: 基础系统支持 (EPDiy, 蜂鸣器, 电池)
 - [x] **阶段2**: 传感器集成 (BMI270陀螺仪, BM8563 RTC)
-- [x] **阶段3**: 硬件控制 (LED, Button, GT911触摸屏)
-- [ ] **阶段4**: SD卡存储支持
-- [ ] **阶段5**: WiFi和网络功能
-- [ ] **阶段6**: 高级应用示例
+- [x] **阶段3**: 硬件控制 (LED, GT911触摸屏)
+- [x] **阶段4**: I2C冲突解决和Arduino兼容性
+- [ ] **阶段5**: SD卡存储支持
+- [ ] **阶段6**: WiFi和网络功能
+- [ ] **阶段7**: 高级应用示例
 
 ## 测试验证
 
@@ -372,9 +355,21 @@ touch.deinit()                    # 释放资源
 - 时间设置：支持
 - I2C通信：稳定，无错误
 
+**GT911触摸屏**：
+- 设备检测：正常，自动识别地址0x14或0x5D
+- 触摸响应：正常，支持多点触摸(最多2点)
+- 中断机制：稳定，FALLING edge触发
+- I2C通信：稳定，与其他设备无冲突
+
+**LED控制**：
+- GPIO 0控制：正常
+- 逻辑修正：低电平点亮，高电平熄灭
+- 状态管理：支持on/off/toggle操作
+
 **系统稳定性**：
 - 启动时间：< 3秒
 - 内存使用：正常
+- I2C冲突：已解决，共享机制稳定
 - 无崩溃或重启问题
 
 ## 故障排除
@@ -396,6 +391,17 @@ touch.deinit()                    # 释放资源
    - 检查显示屏连接
    - 尝试重新初始化：`papers3.epdiy.init()`
 
+4. **触摸屏"GT911 not found"错误**
+   - 检查I2C引脚连接 (SDA=41, SCL=42)
+   - 确认中断引脚连接 (INT=48)
+   - 验证设备上电时序和延时
+   - 尝试重新初始化：`touch.deinit(); touch.init()`
+
+5. **LED逻辑反向**
+   - Papers3硬件使用低电平点亮
+   - `led.on()` = GPIO 0低电平 = LED亮
+   - `led.off()` = GPIO 0高电平 = LED灭
+
 ## 贡献指南
 
 1. Fork项目仓库
@@ -410,10 +416,10 @@ touch.deinit()                    # 释放资源
 
 ## 🏆 项目状态
 
-✅ **已完成**: EPDiy完全集成，绘图功能完善，面向对象架构，构建系统，文档完善，硬件控制完整
-🚀 **可投产**: 固件编译成功，核心功能验证通过，开发工具链完整，EPDiy库完全集成
+✅ **已完成**: EPDiy完全集成，绘图功能完善，面向对象架构，构建系统，文档完善，硬件控制完整，I2C冲突解决
+🚀 **可投产**: 固件编译成功，核心功能验证通过，开发工具链完整，EPDiy库完全集成，Arduino兼容性
 🎯 **EPDiy状态**: main分支 (commit: fe3113a) 完全集成到项目中，支持完整2D绘图功能
-💡 **硬件支持**: LED控制、按钮检测、GT911触摸屏、BMI270陀螺仪、BM8563 RTC全部就绪
+💡 **硬件支持**: LED控制(逻辑修正)、GT911触摸屏(Arduino兼容)、BMI270陀螺仪、BM8563 RTC全部就绪，I2C共享稳定
 
 ## 致谢
 

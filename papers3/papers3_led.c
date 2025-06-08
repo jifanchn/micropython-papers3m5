@@ -51,8 +51,8 @@ static mp_obj_t papers3_led_init(mp_obj_t self_in) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("LED GPIO config failed"));
     }
     
-    // 初始状态设为关闭
-    gpio_set_level(LED_GPIO, 0);
+    // 初始状态设为关闭 (高电平熄灭)
+    gpio_set_level(LED_GPIO, 1);
     self->state = false;
     self->initialized = true;
     
@@ -61,7 +61,7 @@ static mp_obj_t papers3_led_init(mp_obj_t self_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(papers3_led_init_obj, papers3_led_init);
 
-// 打开LED
+// 打开LED (低电平点亮)
 static mp_obj_t papers3_led_on(mp_obj_t self_in) {
     papers3_led_obj_t *self = MP_OBJ_TO_PTR(self_in);
     
@@ -69,14 +69,14 @@ static mp_obj_t papers3_led_on(mp_obj_t self_in) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("LED not initialized"));
     }
     
-    gpio_set_level(LED_GPIO, 1);
+    gpio_set_level(LED_GPIO, 0);  // 低电平点亮LED
     self->state = true;
     
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(papers3_led_on_obj, papers3_led_on);
 
-// 关闭LED
+// 关闭LED (高电平熄灭)
 static mp_obj_t papers3_led_off(mp_obj_t self_in) {
     papers3_led_obj_t *self = MP_OBJ_TO_PTR(self_in);
     
@@ -84,7 +84,7 @@ static mp_obj_t papers3_led_off(mp_obj_t self_in) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("LED not initialized"));
     }
     
-    gpio_set_level(LED_GPIO, 0);
+    gpio_set_level(LED_GPIO, 1);  // 高电平熄灭LED
     self->state = false;
     
     return mp_const_none;

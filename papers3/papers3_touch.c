@@ -110,16 +110,30 @@ static bool gt911_read(papers3_touch_obj_t *self, uint16_t addr, uint8_t *data, 
     return (ret == ESP_OK);
 }
 
-// 检测GT911地址
+// 检测GT911地址 (模拟Arduino Wire.beginTransmission方式)
 static uint8_t detect_gt911_address(void) {
-    // 先尝试地址0x14
-    esp_err_t ret = i2c_master_write_to_device(GT911_I2C_PORT, GT911_ADDR_1, NULL, 0, pdMS_TO_TICKS(100));
+    esp_err_t ret;
+    
+    // 先尝试地址0x14 (模拟Wire.beginTransmission + endTransmission)
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (GT911_ADDR_1 << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_stop(cmd);
+    ret = i2c_master_cmd_begin(GT911_I2C_PORT, cmd, pdMS_TO_TICKS(100));
+    i2c_cmd_link_delete(cmd);
+    
     if (ret == ESP_OK) {
         return GT911_ADDR_1;
     }
     
     // 再尝试地址0x5D
-    ret = i2c_master_write_to_device(GT911_I2C_PORT, GT911_ADDR_2, NULL, 0, pdMS_TO_TICKS(100));
+    cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (GT911_ADDR_2 << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_stop(cmd);
+    ret = i2c_master_cmd_begin(GT911_I2C_PORT, cmd, pdMS_TO_TICKS(100));
+    i2c_cmd_link_delete(cmd);
+    
     if (ret == ESP_OK) {
         return GT911_ADDR_2;
     }
@@ -127,7 +141,42 @@ static uint8_t detect_gt911_address(void) {
     return 0;  // 未找到设备
 }
 
-// 初始化GT911
+// 外部I2C初始化标志 (与gyro模块共享)
+extern bool g_i2c_initialized;
+
+// I2C初始化函数 (共享机制，不重复配置)
+static esp_err_t papers3_touch_i2c_init(void) {
+    if (g_i2c_initialized) {
+        return ESP_OK;  // 已经初始化，直接返回
+    }
+    
+    // 如果I2C还未初始化，使用与gyro模块相同的配置
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = GT911_SDA_PIN,
+        .scl_io_num = GT911_SCL_PIN,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = 100000,  // 使用标准100kHz，与gyro模块一致
+        .clk_flags = 0,
+    };
+    
+    esp_err_t ret = i2c_param_config(GT911_I2C_PORT, &conf);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    
+    ret = i2c_driver_install(GT911_I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    
+    g_i2c_initialized = true;
+    // 移除可能阻塞的日志: ESP_LOGI(TAG, "I2C总线初始化成功");
+    return ESP_OK;
+}
+
+// 初始化GT911 (参考Arduino代码的初始化顺序)
 static mp_obj_t papers3_touch_init(mp_obj_t self_in) {
     papers3_touch_obj_t *self = MP_OBJ_TO_PTR(self_in);
     
@@ -135,64 +184,58 @@ static mp_obj_t papers3_touch_init(mp_obj_t self_in) {
         return mp_const_true;
     }
     
-    // 配置I2C
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = GT911_SDA_PIN,
-        .scl_io_num = GT911_SCL_PIN,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = GT911_I2C_FREQ,
-        .clk_flags = 0,
-    };
-    
-    esp_err_t ret = i2c_param_config(GT911_I2C_PORT, &conf);
-    if (ret != ESP_OK) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("I2C config failed"));
-    }
-    
-    ret = i2c_driver_install(GT911_I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
-    if (ret != ESP_OK) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("I2C driver install failed"));
-    }
-    
-    // 配置中断引脚
+    // 1. 先配置中断引脚为输入 (参考Arduino pinMode(pin_int, INPUT))
     gpio_config_t int_conf = {
         .pin_bit_mask = (1ULL << GT911_INT_PIN),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_NEGEDGE,
+        .intr_type = GPIO_INTR_DISABLE,  // 先不启用中断
     };
     
-    ret = gpio_config(&int_conf);
+    esp_err_t ret = gpio_config(&int_conf);
     if (ret != ESP_OK) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("GT911 INT GPIO config failed"));
     }
     
-    // 检测GT911地址
+    // 2. 初始化I2C总线 (参考Arduino Wire.begin)
+    ret = papers3_touch_i2c_init();
+    if (ret != ESP_OK) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("I2C init failed"));
+    }
+    
+    // 3. 延时100ms (参考Arduino delay(100))
+    vTaskDelay(pdMS_TO_TICKS(100));
+    
+    // 4. 检测GT911地址
     self->gt911_addr = detect_gt911_address();
     if (self->gt911_addr == 0) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("GT911 not found"));
     }
     
-    // 安装中断服务
+    // 5. 安装中断服务 (参考Arduino attachInterrupt)
     ret = gpio_install_isr_service(0);
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("GPIO ISR service install failed"));
     }
     
-    // 注册中断处理函数
+    // 6. 注册中断处理函数 (FALLING edge, 参考Arduino FALLING)
     touch_instance = self;
     ret = gpio_isr_handler_add(GT911_INT_PIN, gt911_irq_handler, NULL);
     if (ret != ESP_OK) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("GT911 IRQ handler add failed"));
     }
     
+    // 7. 启用中断 (现在设备已经检测到，可以安全启用中断)
+    ret = gpio_set_intr_type(GT911_INT_PIN, GPIO_INTR_NEGEDGE);
+    if (ret != ESP_OK) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("GT911 interrupt enable failed"));
+    }
+    
     self->initialized = true;
     
-    mp_printf(&mp_plat_print, "GT911 initialized (addr=0x%02X, SDA=%d, SCL=%d, INT=%d)\n", 
-              self->gt911_addr, GT911_SDA_PIN, GT911_SCL_PIN, GT911_INT_PIN);
+    // 移除可能阻塞的输出: mp_printf(&mp_plat_print, "GT911 initialized (addr=0x%02X, SDA=%d, SCL=%d, INT=%d)\n", 
+    //          self->gt911_addr, GT911_SDA_PIN, GT911_SCL_PIN, GT911_INT_PIN);
     return mp_const_true;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(papers3_touch_init_obj, papers3_touch_init);
