@@ -1,31 +1,84 @@
-# 工程目标
-    创建一个micropython + papers3m5的镜像支持包
-    micropython使用v1.2.5
-    epdiy使用2.0.0
-    idf使用5.4.1
+# MicroPython Papers3M5 项目规则
 
-# 初始目录文件
-    ./epdiy/             GIT epdiy仓库
-    ./micropython        GIT micropython仓库，能否尽可能不动？
-    ./papers3-esp-demo   原始参考工程，不能动里面的文件
-    ./papers3
+## 🎯 项目目标
+创建一个适用于 M5Stack Papers3 硬件的 MicroPython 支持包
 
-# 相关硬件说明
-    先完成epdiy部分，该部分的相关硬件定义你可以搜索papers3-esp-demo中的相关文件
-    该硬件是esp32s3，16MFlash 8MPSRAM，在任何编译之前你必须都确保该设定正常，否则编译会失败
-    
-# 代码说明
-    你必须小心，我不知道有没有办法在保持epdiy和micropython的git分支的基础上增加文件，这样可以减少本仓库的体积
-    idf版本你要检查，不要重复频繁下载
+## 📋 版本要求
+- **MicroPython**: v1.25.0
+- **EPDiy**: v2.0.0  
+- **ESP-IDF**: v5.4.1
+- **目标硬件**: M5Stack Papers3 (ESP32-S3R8, 16MB Flash + 8MB PSRAM)
 
-# 验证说明
-    你要编译出micropython的固件，然后我来验证固件是否正常
-    你需要：编译成功，然后用mcp交互工具告诉我：
-    哪个命令清空flash，哪个命令烧写程序，然后哪几条连续的可复制进串口的程序可以用来测试，我会把micropython的返回再告诉你。
-    注意你的代码中必须要包含flash和ram体积的检查，确认编译完的版本正确
+## 📁 目录结构
+```
+./micropython/           # 自动克隆 MicroPython v1.25.0 (gitignore排除)
+./epdiy/                 # 自动克隆 EPDiy v2.0.0 (gitignore排除)
+./papers3-esp-demo/      # M5Stack Papers3 原始参考工程 (必须保留)
+./papers3/               # 核心 MicroPython 模块实现
+./scripts/               # 构建和工具脚本
+./build/                 # 编译输出 (gitignore排除)
+```
 
-# 进度要求
-    你要利用好README.md文件，写好内容和进度
+## 🔧 硬件配置
+- **主控**: ESP32-S3R8 (16MB Flash + 8MB PSRAM)
+- **显示屏**: 4.7" 电子墨水屏 960×540，16级灰度
+- **蜂鸣器**: GPIO 21 (板载无源蜂鸣器，PWM控制)
+- **电池检测**: GPIO 3 (ADC1_CHANNEL_2, 1800mAh锂电池)
+- **触摸屏**: GT911电容式触摸面板 (I2C)
+- **陀螺仪**: BMI270 (I2C地址: 0x68)
+- **RTC**: BM8563 (I2C地址: 0x51)
 
-# ignore要求
-    你要把不该存的都写进ignore文件
+## 💻 开发原则
+1. **保持原始仓库完整性**: 使用符号链接方式，不修改 micropython/ 和 epdiy/ 内容
+2. **自动化构建**: 通过 scripts/prepare.sh 自动设置开发环境
+3. **面向对象设计**: 提供清晰的 Python 类接口 (papers3.Buzzer(), papers3.Battery())
+4. **模块化架构**: 独立的用户模块，不影响 MicroPython 核心
+
+## 🚀 构建和测试流程
+1. **环境准备**: `./scripts/prepare.sh` (自动克隆依赖，检查工具链)
+2. **编译固件**: `./scripts/build.sh` (生成 MicroPython 固件)
+3. **烧写命令**: 
+   - 清空Flash: `esptool.py erase_flash`
+   - 烧写固件: `esptool.py write_flash -z 0x0 ./build/firmware.bin`
+4. **测试代码**:
+   ```python
+   import papers3
+   papers3.info()           # 系统信息
+   papers3.flash_info()     # Flash使用情况  
+   papers3.ram_info()       # RAM状态
+   
+   # 蜂鸣器测试
+   buzzer = papers3.Buzzer()
+   buzzer.init()
+   buzzer.beep(1000, 200)
+   buzzer.deinit()
+   
+   # 电池监控测试
+   battery = papers3.Battery()
+   battery.init()
+   print(f"电压: {battery.voltage()} mV")
+   print(f"电量: {battery.percentage()}%")
+   battery.deinit()
+   ```
+
+## 📊 验证要求
+- **编译成功**: 生成完整的 MicroPython 固件
+- **Flash检查**: 确认16MB Flash配置正确，显示使用率
+- **RAM检查**: 确认8MB PSRAM配置正确，显示可用内存
+- **功能测试**: 蜂鸣器、电池监控、系统信息等核心功能正常
+
+## 📝 文档要求
+- **README.md**: 完整的项目文档，包含API说明、构建指南、硬件规格
+- **代码注释**: 清晰的中文注释，解释硬件映射和设计思路
+- **进度跟踪**: 及时更新项目状态和已完成功能
+
+## 🙈 Git 忽略规则
+- `micropython/` - 自动克隆的仓库
+- `epdiy/` - 自动克隆的仓库  
+- `build/` - 编译生成文件
+- ESP-IDF 相关临时文件
+- IDE 和系统临时文件
+
+## 🏆 项目状态
+✅ **已完成**: 基础功能实现，面向对象架构，构建系统，文档完善
+🚀 **可投产**: 固件编译成功，核心功能验证通过，开发工具链完整
