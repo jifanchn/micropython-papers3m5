@@ -19,8 +19,8 @@ static const char* TAG = "papers3_touch";
 // GT911寄存器地址
 #define GT911_ADDR_1      0x14         // GT911地址1
 #define GT911_ADDR_2      0x5D         // GT911地址2
-#define GT911_STATUS_REG  0x814E       // 状态寄存器
-#define GT911_COORD_REG   0x814F       // 坐标寄存器
+#define GT911_STATUS_REG  0x814E       // 状态寄存器 (与Arduino一致)
+#define GT911_COORD_REG   0x8150       // 坐标寄存器 (与Arduino一致: read(0x8150, data, num * 8))
 
 // 触摸点数据结构
 typedef struct {
@@ -300,17 +300,33 @@ static mp_obj_t papers3_touch_update(mp_obj_t self_in) {
                 for (int j = 0; j < (num < 2 ? num : 2); j++) {
                     uint8_t *buf = &data[j * 8];
                     
-                    // 根据旋转模式处理坐标
-                    if (self->rotate == 1) {  // ROTATE_90 (默认)
-                        self->fingers[j].x = (buf[1] << 8) | buf[0];
-                        self->fingers[j].y = (buf[3] << 8) | buf[2];
+                    // 调试：打印原始字节数据
+                    // mp_printf(&mp_plat_print, "Raw bytes[%d]: %02X %02X %02X %02X %02X %02X %02X %02X\n", 
+                    //           j, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+                    
+                    // 根据旋转模式处理坐标 (修复坐标映射)
+                    if (self->rotate == 1) {  // ROTATE_90 (默认，适合Papers3)
+                        // 使用ROTATE_0的映射方式，因为Papers3可能需要不同的坐标系
+                        self->fingers[j].x = (buf[3] << 8) | buf[2];
+                        self->fingers[j].y = 540 - ((buf[1] << 8) | buf[0]);
+                        
+                        // 确保坐标在有效范围内
+                        if (self->fingers[j].x > 960) self->fingers[j].x = 960;
+                        if (self->fingers[j].y > 540) self->fingers[j].y = 540;
+                        if (self->fingers[j].x < 0) self->fingers[j].x = 0;
+                        if (self->fingers[j].y < 0) self->fingers[j].y = 0;
+                    } else if (self->rotate == 0) {  // ROTATE_0
+                        // Arduino: _fingers[j].x = (buf[3] << 8) | buf[2];
+                        //          _fingers[j].y = 540 - ((buf[1] << 8) | buf[0]);
+                        self->fingers[j].x = (buf[3] << 8) | buf[2];
+                        self->fingers[j].y = 540 - ((buf[1] << 8) | buf[0]);
                     } else {
-                        // 其他旋转模式可以后续添加
-                        self->fingers[j].x = (buf[1] << 8) | buf[0];
-                        self->fingers[j].y = (buf[3] << 8) | buf[2];
+                        // 其他旋转模式使用ROTATE_0映射
+                        self->fingers[j].x = (buf[3] << 8) | buf[2];
+                        self->fingers[j].y = 540 - ((buf[1] << 8) | buf[0]);
                     }
                     
-                    self->fingers[j].size = (buf[5] << 8) | buf[4];
+                    self->fingers[j].size = (buf[5] << 8) | buf[4];  // 与Arduino一致
                     self->fingers[j].id = buf[7];
                 }
             }
