@@ -5,7 +5,6 @@ build/
 
 # Git repositories (auto-cloned by prepare.sh)
 micropython/
-epdiy/
 
 # macOS
 .DS_Store
@@ -163,7 +162,5 @@ micropython/ports/esp32/modules/papers3/
 *.temp 
 
 # libraries
-epdiy
-epdiy/*
 micropython
 micropython/*

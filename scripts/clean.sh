@@ -38,12 +38,8 @@ if [ -d ".git" ]; then
     git clean -fd 2>/dev/null || true
 fi
 
-cd "$PROJECT_ROOT/epdiy"
-if [ -d ".git" ]; then
-    echo "Restoring EPDiy git state..."
-    git checkout . 2>/dev/null || true
-    git clean -fd 2>/dev/null || true
-fi
+# EPDiy is now integrated into the project (no .git directory)
+echo "EPDiy is integrated into project (no git cleanup needed)"
 
 echo "=== Clean Complete ==="
 echo "All build artifacts removed, git repositories restored." 

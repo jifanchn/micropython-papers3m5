@@ -36,24 +36,14 @@ else
     cd ..
 fi
 
-# Check and clone EPDiy
-if [ ! -d "epdiy" ]; then
-    echo "📥 Cloning EPDiy v2.0.0..."
-    git clone --branch v2.0.0 --depth 1 https://github.com/vroland/epdiy.git
-    echo "✅ EPDiy cloned successfully"
+# Check EPDiy (now included in project)
+if [ -d "epdiy" ]; then
+    echo "✅ EPDiy directory exists (integrated into project)"
+    echo "   EPDiy version: main branch (commit: fe3113a) - fixes ESP-IDF v5.4.1 build issues"
 else
-    echo "✅ EPDiy directory already exists"
-    # Check if it's the correct branch
-    cd epdiy
-    CURRENT_BRANCH=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "unknown")
-    if [ "$CURRENT_BRANCH" != "v2.0.0" ]; then
-        echo "⚠️  Warning: EPDiy is not on v2.0.0 (current: $CURRENT_BRANCH)"
-        echo "   You may want to checkout the correct branch:"
-        echo "   cd epdiy && git checkout v2.0.0"
-    else
-        echo "✅ EPDiy is on correct branch: v2.0.0"
-    fi
-    cd ..
+    echo "❌ EPDiy directory not found"
+    echo "   EPDiy is required and should be included in the project"
+    echo "   Please ensure the epdiy/ directory exists with the required source code"
 fi
 
 echo "=== Initializing MicroPython Submodules ==="
@@ -112,7 +102,7 @@ echo ""
 echo "=== Preparation Summary ==="
 echo "📁 Project structure:"
 echo "   ./micropython/     - MicroPython v1.25.0"
-echo "   ./epdiy/           - EPDiy v2.0.0"
+echo "   ./epdiy/           - EPDiy library (commit: fe3113a, integrated)"
 echo "   ./papers3/         - Papers3 module source"
 echo "   ./scripts/         - Build and utility scripts"
 echo ""

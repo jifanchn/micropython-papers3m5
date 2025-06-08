@@ -5,14 +5,14 @@
 
 ## 📋 版本要求
 - **MicroPython**: v1.25.0
-- **EPDiy**: v2.0.0  
+- **EPDiy**: main分支 (commit: fe3113a) - 修复ESP-IDF v5.4.1编译问题，已集成到项目中
 - **ESP-IDF**: v5.4.1
 - **目标硬件**: M5Stack Papers3 (ESP32-S3R8, 16MB Flash + 8MB PSRAM)
 
 ## 📁 目录结构
 ```
 ./micropython/           # 自动克隆 MicroPython v1.25.0 (gitignore排除)
-./epdiy/                 # 自动克隆 EPDiy v2.0.0 (gitignore排除)
+./epdiy/                 # EPDiy库源码，已集成到项目中 (commit: fe3113a)
 ./papers3-esp-demo/      # M5Stack Papers3 原始参考工程 (必须保留)
 ./papers3/               # 核心 MicroPython 模块实现
 ./scripts/               # 构建和工具脚本
@@ -29,14 +29,14 @@
 - **RTC**: BM8563 (I2C地址: 0x51)
 
 ## 💻 开发原则
-1. **保持原始仓库完整性**: 使用符号链接方式，不修改 micropython/ 和 epdiy/ 内容
+1. **项目完整性**: EPDiy库已集成到项目中，不修改 micropython/ 内容
 2. **自动化构建**: 通过 scripts/prepare.sh 自动设置开发环境
 3. **面向对象设计**: 提供清晰的 Python 类接口 (papers3.Buzzer(), papers3.Battery())
 4. **模块化架构**: 独立的用户模块，不影响 MicroPython 核心
 5. **代码风格**: 使用MicroPython的代码风格，使用中文注释，注意相关库函数不要直接使用esp32的库，而是使用micropython平台代码，避免重复初始化冲突
 
 ## 🚀 构建和测试流程
-1. **环境准备**: `./scripts/prepare.sh` (自动克隆依赖，检查工具链)
+1. **环境准备**: `./scripts/prepare.sh` (自动克隆MicroPython依赖，检查工具链)
 2. **编译固件**: `./scripts/build.sh` (生成 MicroPython 固件)
 3. **烧写命令**: 
    - 清空Flash: `esptool.py erase_flash`
@@ -75,11 +75,10 @@
 
 ## 🙈 Git 忽略规则
 - `micropython/` - 自动克隆的仓库
-- `epdiy/` - 自动克隆的仓库  
 - `build/` - 编译生成文件
 - ESP-IDF 相关临时文件
 - IDE 和系统临时文件
 
 ## 🏆 项目状态
-✅ **已完成**: 基础功能实现，面向对象架构，构建系统，文档完善
+✅ **已完成**: EPDiy集成，基础功能实现，面向对象架构，构建系统，文档完善
 🚀 **可投产**: 固件编译成功，核心功能验证通过，开发工具链完整
