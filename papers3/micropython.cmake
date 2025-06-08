@@ -6,6 +6,8 @@ set(PAPERS3_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/modpapers3.c
     ${CMAKE_CURRENT_LIST_DIR}/papers3_buzzer.c
     ${CMAKE_CURRENT_LIST_DIR}/papers3_battery.c
+    ${CMAKE_CURRENT_LIST_DIR}/papers3_gyro.c
+    ${CMAKE_CURRENT_LIST_DIR}/papers3_rtc.c
 )
 
 # Create user module
@@ -32,4 +34,11 @@ target_link_libraries(usermod_papers3 INTERFACE
     idf::esp_driver_ledc
 )
 
-target_link_libraries(usermod INTERFACE usermod_papers3) 
+target_link_libraries(usermod INTERFACE usermod_papers3)
+
+# Add include to global project
+if(TARGET usermod)
+    target_include_directories(usermod INTERFACE
+        ${CMAKE_CURRENT_LIST_DIR}
+    )
+endif() 
