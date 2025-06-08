@@ -16,6 +16,9 @@
 // Forward declarations for class constructors
 extern const mp_obj_type_t papers3_buzzer_type;
 extern const mp_obj_type_t papers3_battery_type;
+extern const mp_obj_type_t papers3_gyro_type;
+extern const mp_obj_type_t papers3_rtc_type;
+extern const mp_obj_type_t papers3_sdcard_type;
 
 // Info function
 static mp_obj_t papers3_info(void) {
@@ -24,6 +27,9 @@ static mp_obj_t papers3_info(void) {
     mp_printf(&mp_plat_print, "Available classes:\n");
     mp_printf(&mp_plat_print, "  - papers3.Buzzer() - PWM buzzer control\n");
     mp_printf(&mp_plat_print, "  - papers3.Battery() - Battery monitoring (real ADC)\n");
+    mp_printf(&mp_plat_print, "  - papers3.Gyro() - BMI270 accelerometer & gyroscope\n");
+    mp_printf(&mp_plat_print, "  - papers3.RTC() - BM8563 real-time clock\n");
+    mp_printf(&mp_plat_print, "  - papers3.SDCard() - SD card file system\n");
     mp_printf(&mp_plat_print, "System functions:\n");
     mp_printf(&mp_plat_print, "  - papers3.flash_info() - Flash memory information\n");
     mp_printf(&mp_plat_print, "  - papers3.ram_info() - RAM memory information\n");
@@ -111,6 +117,9 @@ static const mp_rom_map_elem_t papers3_globals_table[] = {
     // Object-oriented classes only
     { MP_ROM_QSTR(MP_QSTR_Buzzer), MP_ROM_PTR(&papers3_buzzer_type) },
     { MP_ROM_QSTR(MP_QSTR_Battery), MP_ROM_PTR(&papers3_battery_type) },
+    { MP_ROM_QSTR(MP_QSTR_Gyro), MP_ROM_PTR(&papers3_gyro_type) },
+    { MP_ROM_QSTR(MP_QSTR_RTC), MP_ROM_PTR(&papers3_rtc_type) },
+    { MP_ROM_QSTR(MP_QSTR_SDCard), MP_ROM_PTR(&papers3_sdcard_type) },
 };
 
 static MP_DEFINE_CONST_DICT(papers3_globals, papers3_globals_table);

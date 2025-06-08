@@ -33,6 +33,7 @@
 2. **自动化构建**: 通过 scripts/prepare.sh 自动设置开发环境
 3. **面向对象设计**: 提供清晰的 Python 类接口 (papers3.Buzzer(), papers3.Battery())
 4. **模块化架构**: 独立的用户模块，不影响 MicroPython 核心
+5. **代码风格**: 使用MicroPython的代码风格，使用中文注释，注意相关库函数不要直接使用esp32的库，而是使用micropython平台代码，避免重复初始化冲突
 
 ## 🚀 构建和测试流程
 1. **环境准备**: `./scripts/prepare.sh` (自动克隆依赖，检查工具链)
@@ -40,7 +41,7 @@
 3. **烧写命令**: 
    - 清空Flash: `esptool.py erase_flash`
    - 烧写固件: `esptool.py write_flash -z 0x0 ./build/firmware.bin`
-4. **测试代码**:
+4. **几个参考库的测试代码**:
    ```python
    import papers3
    papers3.info()           # 系统信息

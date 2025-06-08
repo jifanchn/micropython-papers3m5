@@ -1,11 +1,14 @@
 # MicroPython User Module for Papers3
 # Simplified implementation with battery and buzzer only
 
-# Papers3 module sources (no EPDiy for now)
+# Papers3 module sources (complete hardware support)
 set(PAPERS3_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/modpapers3.c
     ${CMAKE_CURRENT_LIST_DIR}/papers3_buzzer.c
     ${CMAKE_CURRENT_LIST_DIR}/papers3_battery.c
+    ${CMAKE_CURRENT_LIST_DIR}/papers3_gyro.c
+    ${CMAKE_CURRENT_LIST_DIR}/papers3_rtc.c
+    ${CMAKE_CURRENT_LIST_DIR}/papers3_sdcard.c
 )
 
 # Create user module
@@ -23,13 +26,16 @@ target_compile_definitions(usermod_papers3 INTERFACE
     MODULE_PAPERS3_ENABLED=1
 )
 
-# Link with required ESP-IDF components for basic functionality
+# Link with required ESP-IDF components for complete hardware support
 target_link_libraries(usermod_papers3 INTERFACE
     idf::freertos
     idf::esp_timer
     idf::driver
     idf::esp_driver_gpio
     idf::esp_driver_ledc
+    idf::esp_driver_i2c
+    idf::esp_driver_spi
+    idf::sdmmc
 )
 
 target_link_libraries(usermod INTERFACE usermod_papers3) 
