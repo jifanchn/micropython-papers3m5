@@ -9,6 +9,7 @@
 #include "py/mphal.h"
 #include "py/mperrno.h"
 #include "py/objstr.h"
+#include "py/objint.h"
 
 // ESP-IDF 基础头文件
 #include "esp_err.h"
@@ -30,6 +31,8 @@
 #include "epd_board.h"
 #include "lcd_driver.h"  // 关键！包含LCD类型定义
 #include <inttypes.h>
+
+
 
 // MicroPython 静态定义
 #ifndef STATIC
@@ -651,6 +654,42 @@ STATIC mp_obj_t papers3_epdiy_fill_triangle(size_t n_args, const mp_obj_t *args)
     return mp_const_none;
 }
 
+// 绘制文字
+STATIC mp_obj_t papers3_epdiy_draw_text(size_t n_args, const mp_obj_t *args) {
+    papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    
+    if (!self->initialized) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
+    }
+    
+    if (n_args < 5) {
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, text, color"));
+    }
+    
+    int x = mp_obj_get_int(args[1]);
+    int y = mp_obj_get_int(args[2]);
+    const char* text = mp_obj_str_get_str(args[3]);
+    uint8_t color = mp_obj_get_int(args[4]);
+    
+    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
+    if (framebuffer == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
+    }
+    
+    // 设置字体属性
+    EpdFontProperties props = epd_font_properties_default();
+    props.fg_color = color & 0x0F;  // 前景色 (4位)
+    props.bg_color = 0x0F;          // 背景色设为白色
+    props.fallback_glyph = 0;       // 缺失字符的后备字符
+    props.flags = EPD_DRAW_BACKGROUND; // 绘制背景
+    
+    // TODO: 实现文字绘制功能
+    // 暂时返回错误信息，字体集成问题需要进一步解决
+    mp_raise_msg(&mp_type_NotImplementedError, MP_ERROR_TEXT("Text drawing not yet implemented - font integration needed"));
+    
+    return mp_const_none;
+}
+
 // ===== MicroPython 方法表和对象定义 =====
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_init_obj, papers3_epdiy_init);
@@ -673,6 +712,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_circle_obj, 5, 5, 
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_fill_circle_obj, 5, 5, papers3_epdiy_fill_circle);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_triangle_obj, 8, 8, papers3_epdiy_draw_triangle);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_fill_triangle_obj, 8, 8, papers3_epdiy_fill_triangle);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_text_obj, 5, 5, papers3_epdiy_draw_text);
 
 // 方法字典
 STATIC const mp_rom_map_elem_t papers3_epdiy_locals_dict_table[] = {
@@ -703,6 +743,7 @@ STATIC const mp_rom_map_elem_t papers3_epdiy_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_fill_circle), MP_ROM_PTR(&papers3_epdiy_fill_circle_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw_triangle), MP_ROM_PTR(&papers3_epdiy_draw_triangle_obj) },
     { MP_ROM_QSTR(MP_QSTR_fill_triangle), MP_ROM_PTR(&papers3_epdiy_fill_triangle_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw_text), MP_ROM_PTR(&papers3_epdiy_draw_text_obj) },
     
     // 常量 - 绘制模式
     { MP_ROM_QSTR(MP_QSTR_MODE_INIT), MP_ROM_INT(MODE_INIT) },

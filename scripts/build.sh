@@ -137,18 +137,7 @@ if [ -f "build-PAPERS3/firmware.bin" ]; then
     fi
     echo ""
     
-    # 显示测试代码
-    echo "=== Test Code ==="
-    echo "import papers3"
-    echo "papers3.info()"
-    echo "papers3.epdiy.init()"
-    echo "papers3.epdiy.clear()"
-    echo "papers3.epdiy.draw_text(100, 100, \"Hello Papers3\", 0x00)"
-    echo "papers3.epdiy.update()"
-    echo "papers3.buzzer.init()"
-    echo "papers3.buzzer.beep(1000, 500)"
-    echo "papers3.battery.init()"
-    echo "papers3.battery.status()"
+
     
 else
     echo "=== Build Failed ==="

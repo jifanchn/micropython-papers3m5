@@ -113,19 +113,24 @@ import papers3
 papers3.info()
 
 # E-Ink显示测试
-papers3.epdiy.init()
-papers3.epdiy.clear()
-papers3.epdiy.draw_text(100, 100, "Hello Papers3", 0x00)
-papers3.epdiy.update()
+epd = papers3.EPDiy()
+epd.init()
+epd.clear()
+epd.draw_rect(50, 50, 200, 100, 0x00)  # 绘制矩形
+epd.update_screen()
 
 # 蜂鸣器测试
-papers3.buzzer.init()
-papers3.buzzer.beep(1000, 500)  # 1kHz, 500ms
+buzzer = papers3.Buzzer()
+buzzer.init()
+buzzer.beep(1000, 500)  # 1kHz, 500ms
+buzzer.deinit()
 
 # 电池状态
-papers3.battery.init()
-print("电池电压:", papers3.battery.voltage(), "V")
-print("电池状态:", papers3.battery.status())
+battery = papers3.Battery()
+battery.init()
+print("电池电压:", battery.voltage(), "mV")
+print("电池状态:", battery.status())
+battery.deinit()
 ```
 
 ### 4. 传感器测试
@@ -156,37 +161,55 @@ papers3.info()                    # 显示系统信息
 ### EPDiy显示模块
 
 ```python
-papers3.epdiy.init()              # 初始化显示
-papers3.epdiy.clear()             # 清屏
-papers3.epdiy.draw_text(x, y, text, color)  # 绘制文本
-papers3.epdiy.update()            # 更新显示
+# 创建EPDiy显示对象
+epd = papers3.EPDiy()
+
+# 基础操作
+epd.init()                        # 初始化显示
+epd.clear()                       # 清屏
+epd.update_screen()              # 更新整屏显示
 
 # 基础绘图函数
-papers3.epdiy.draw_pixel(x, y, color)           # 绘制像素
-papers3.epdiy.draw_line(x0, y0, x1, y1, color)  # 绘制直线
-papers3.epdiy.draw_rect(x, y, w, h, color)      # 绘制矩形
-papers3.epdiy.fill_rect(x, y, w, h, color)      # 填充矩形
+epd.draw_pixel(x, y, color)      # 绘制像素
+epd.draw_line(x0, y0, x1, y1, color)  # 绘制直线
+epd.draw_rect(x, y, w, h, color)      # 绘制矩形
+epd.fill_rect(x, y, w, h, color)      # 填充矩形
 
 # 高级绘图函数
-papers3.epdiy.draw_circle(x, y, r, color)       # 绘制圆形
-papers3.epdiy.fill_circle(x, y, r, color)       # 填充圆形
-papers3.epdiy.draw_triangle(x0, y0, x1, y1, x2, y2, color)  # 绘制三角形
-papers3.epdiy.fill_triangle(x0, y0, x1, y1, x2, y2, color)  # 填充三角形
+epd.draw_circle(x, y, r, color)       # 绘制圆形
+epd.fill_circle(x, y, r, color)       # 填充圆形
+epd.draw_triangle(x0, y0, x1, y1, x2, y2, color)  # 绘制三角形
+epd.fill_triangle(x0, y0, x1, y1, x2, y2, color)  # 填充三角形
+
+# 文本绘制（需要字体集成）
+# epd.draw_text(x, y, text, color)    # 待完善
+
+# 属性访问
+print(f"分辨率: {epd.width()} x {epd.height()}")
+epd.set_temperature(25)              # 设置温度补偿
 ```
 
 ### 蜂鸣器模块
 
 ```python
-papers3.buzzer.init()             # 初始化蜂鸣器
-papers3.buzzer.beep(freq, duration)  # 播放音调
+# 创建蜂鸣器对象
+buzzer = papers3.Buzzer()
+
+buzzer.init()                     # 初始化蜂鸣器
+buzzer.beep(freq, duration)       # 播放音调
+buzzer.deinit()                   # 释放资源
 ```
 
 ### 电池模块
 
 ```python
-papers3.battery.init()            # 初始化电池监控
-papers3.battery.voltage()         # 读取电压 (V)
-papers3.battery.status()          # 获取状态信息
+# 创建电池监控对象
+battery = papers3.Battery()
+
+battery.init()                    # 初始化电池监控
+voltage = battery.voltage()       # 读取电压 (mV)
+status = battery.status()         # 获取状态信息
+battery.deinit()                  # 释放资源
 ```
 
 ### BMI270陀螺仪模块
@@ -211,8 +234,8 @@ rtc.alarm(hour, minute)           # 设置闹钟
 ## 技术架构
 
 ### I2C总线配置
-- **SDA引脚**: GPIO 41
-- **SCL引脚**: GPIO 42  
+- **SDA引脚**: GPIO 12
+- **SCL引脚**: GPIO 11  
 - **频率**: 100kHz
 - **驱动**: ESP-IDF I2C驱动 (避免MicroPython machine模块冲突)
 
