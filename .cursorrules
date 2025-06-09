@@ -16,6 +16,7 @@
 ./papers3-esp-demo/      # M5Stack Papers3 原始参考工程 (必须保留)
 ./papers3/               # 核心 MicroPython 模块实现
 ./scripts/               # 构建和工具脚本
+./demo/                  # 演示和测试程序目录
 ./build/                 # 编译输出 (gitignore排除)
 ```
 
@@ -38,10 +39,9 @@
 ## 🚀 构建和测试流程
 1. **环境准备**: `./scripts/prepare.sh` (自动克隆MicroPython依赖，检查工具链)
 2. **编译固件**: `./scripts/build.sh` (生成 MicroPython 固件)
-3. **烧写命令**: 
-   - 清空Flash: `esptool.py erase_flash`
-   - 烧写固件: `esptool.py write_flash -z 0x0 ./build/firmware.bin`
-4. **几个参考库的测试代码**:
+3. **烧写固件**: `./scripts/flash.sh` (自动检测端口，烧写固件)
+4. **下载演示**: `./scripts/download.sh` (自动下载demo目录中的测试程序)
+5. **几个参考库的测试代码**:
    ```python
    import papers3
    papers3.info()           # 系统信息
@@ -78,6 +78,21 @@
 - `build/` - 编译生成文件
 - ESP-IDF 相关临时文件
 - IDE 和系统临时文件
+
+## 📺 Demo目录规范
+1. **文件组织**: 每个功能独立成一个.py文件，避免创建demo.py等通用名称
+2. **代码结构**: 
+   - 所有功能集中在单个文件中 (测试函数 + 演示函数 + help函数)
+   - 提供函数式调用接口，便于import使用
+   - 包含完整的帮助信息和使用示例
+3. **命名规范**:
+   - 文件名: `功能名_test.py` (如: screen_range_test.py)
+   - 函数名: `test_功能()` (测试函数) + `demo_模式()` (演示函数)
+4. **文档要求**:
+   - 每个文件包含详细的docstring说明
+   - README.md解释所有可用的测试程序
+   - 提供完整的使用方法和参数说明
+5. **下载工具**: 使用 `./scripts/download.sh` 自动下载到ESP32设备
 
 ## 🏆 项目状态
 ✅ **已完成**: EPDiy集成，基础功能实现，面向对象架构，构建系统，文档完善

@@ -105,7 +105,7 @@ fi
 # 构建esptool命令
 ESPTOOL_CMD="esptool.py"
 
-# 端口检测和选择
+# 端口检测和选择 (优化版本，来自download.sh)
 detect_and_select_port() {
     local ports=()
     
@@ -131,11 +131,6 @@ detect_and_select_port() {
         while IFS= read -r -d '' port; do
             ports+=("$port")
         done < <(find /dev -name "cu.usb*" -print0 2>/dev/null | sort -z)
-        
-        # 蓝牙设备 (优先级较低)
-        while IFS= read -r -d '' port; do
-            ports+=("$port")
-        done < <(find /dev -name "cu.*Bluetooth*" -print0 2>/dev/null | sort -z)
     fi
     
     # Linux 端口
@@ -156,7 +151,8 @@ detect_and_select_port() {
         # COM端口 (Windows)
         for i in {1..20}; do
             port="COM$i"
-            if esptool.py --port "$port" chip_id &>/dev/null; then
+            # 简单测试端口是否存在
+            if [ -e "$port" ] 2>/dev/null; then
                 ports+=("$port")
             fi
         done
