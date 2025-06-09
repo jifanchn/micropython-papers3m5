@@ -686,8 +686,8 @@ STATIC mp_obj_t papers3_epdiy_draw_text(size_t n_args, const mp_obj_t *args) {
     
     // 设置字体属性
     EpdFontProperties props = epd_font_properties_default();
-    props.fg_color = color & 0x0F;  // 前景色 (4位)
-    props.bg_color = 0x0F;          // 背景色设为白色
+    props.fg_color = (color >> 4) & 0x0F;  // 前景色 (高4位)
+    props.bg_color = 0x0F;          // 背景色设为白色 (15)
     props.fallback_glyph = '?';     // 缺失字符用问号替代
     props.flags = EPD_DRAW_BACKGROUND; // 绘制背景
     
