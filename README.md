@@ -17,6 +17,8 @@
 - **电池**: GPIO 3 电池检测 (ADC1_CHANNEL_2, 1800mAh)
 - **LED**: 板载状态LED
 
+> 📱 **显示开发规范**: 查看 [`docs/DISPLAY_SPECS.md`](docs/DISPLAY_SPECS.md) 了解详细的屏幕规格、字体标准、最佳边界设置等重要开发信息。
+
 ## 🚀 快速开始
 
 ### 1. 环境准备

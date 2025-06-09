@@ -60,15 +60,15 @@ class ScreenRangeTest:
         return True
         
     def _safe_draw_text(self, text, x, y, color=0):
-        """安全绘制文本，自动处理异常"""
+        """安全绘制文本，自动处理边界"""
         try:
-            # 确保坐标在有效范围内
-            x = max(0, min(x, self.width - 10))
-            y = max(0, min(y, self.height - 10))
+            # 确保坐标在最佳显示范围内
+            x = max(10, min(x, 850))  # 左边界x=10，右边界x=850
+            y = max(45, min(y, 520))  # 上边界y=45，下边界y=520
             
-            # 限制文本长度，避免超出屏幕
-            if len(text) > 25:
-                text = text[:22] + "..."
+            # 限制文本长度
+            if len(text) > 20:
+                text = text[:17] + "..."
                 
             self.epdiy.draw_text(text, x, y, color)
             return True
@@ -91,12 +91,12 @@ class ScreenRangeTest:
             self.epdiy.draw_rect(0, 0, self.width-1, self.height-1, 0)
             print(f"📐 绘制屏幕边界: (0,0) 到 ({self.width-1},{self.height-1})")
             
-            # 四个角落标记
+            # 修复的四个角落标记 - 确保文字不超出边界
             corners = [
-                (10, 30, "左上角 (0,0)"),
-                (self.width-150, 30, f"右上角 ({self.width},0)"),
-                (10, self.height-50, f"左下角 (0,{self.height})"),
-                (self.width-200, self.height-50, f"右下角 ({self.width},{self.height})")
+                (10, 30, "左上(0,0)"),                    # 左上角，文字较短
+                (self.width-100, 30, "右上"),              # 右上角，简化文字
+                (10, self.height-40, "左下"),              # 左下角，简化文字  
+                (self.width-100, self.height-40, "右下")   # 右下角，简化文字
             ]
             
             for x, y, text in corners:
@@ -130,21 +130,21 @@ class ScreenRangeTest:
             # 绘制垂直网格线
             for x in range(0, self.width, grid_size):
                 self.epdiy.draw_line(x, 0, x, self.height-1, 8)  # 灰色线
-                if x > 0:  # 避免在边缘绘制坐标
-                    self._safe_draw_text(str(x), x-10, 20, 0)
+                if x > 0 and x < self.width - 50:  # 避免右边界文字超出
+                    self._safe_draw_text(str(x), x-15, 45, 8)  # 最佳位置：y=45
                     
             # 绘制水平网格线
             for y in range(0, self.height, grid_size):
                 self.epdiy.draw_line(0, y, self.width-1, y, 8)  # 灰色线
-                if y > 30:  # 避免与上方坐标重叠
-                    self._safe_draw_text(str(y), 5, y-10, 0)
+                if y > 70 and y < self.height - 20:  # 避免与上方坐标重叠，从y=70开始，下方留20px
+                    self._safe_draw_text(str(y), 10, y-5, 8)  # 最佳位置：x=10
                     
             # 绘制坐标轴（黑色加粗）
             self.epdiy.draw_line(0, 0, self.width-1, 0, 0)  # 顶边
             self.epdiy.draw_line(0, 0, 0, self.height-1, 0)  # 左边
             
-            # 标题
-            self._safe_draw_text(f"坐标网格 ({grid_size}px)", 40, 50, 0)
+            # 标题放在右上角最佳位置
+            self._safe_draw_text(f"网格{grid_size}px", 850, 50, 0)
             
             # 更新显示
             self.epdiy.update()
@@ -153,7 +153,7 @@ class ScreenRangeTest:
         except Exception as e:
             print(f"❌ 网格测试失败: {e}")
             
-    def test_text_layout(self, start_x=50, start_y=50, line_spacing=80, num_lines=6):
+    def test_text_layout(self, start_x=80, start_y=50, line_spacing=70, num_lines=6):
         """文本布局测试 - 测试文本间距和排列"""
         if not self._check_init():
             return
@@ -165,19 +165,19 @@ class ScreenRangeTest:
             # 清屏
             self.epdiy.clear()
             
-            # 绘制参考线
-            self.epdiy.draw_line(start_x, 0, start_x, self.height-1, 8)  # 垂直参考线
+            # 绘制参考线，避开文字区域
+            self.epdiy.draw_line(start_x-10, 0, start_x-10, self.height-1, 8)  # 垂直参考线左移
             
             # 测试文本行
             test_texts = [
-                f"第1行 起点({start_x},{start_y})",
-                f"第2行 间距{line_spacing}px",
-                "第3行 Hello World 123",
-                "第4行 中英文混合测试",
-                f"第5行 Papers3 显示测试",
-                f"第6行 最大坐标({self.width},{self.height})",
-                "第7行 额外测试行",
-                "第8行 边界检查"
+                f"行1: 起点({start_x},{start_y})",
+                f"行2: 间距{line_spacing}px", 
+                "行3: Hello World",
+                "行4: 中英文测试",
+                f"行5: Papers3测试",
+                f"行6: 屏幕{self.width}x{self.height}",
+                "行7: 额外测试",
+                "行8: 边界检查"
             ]
             
             current_y = start_y
@@ -185,7 +185,7 @@ class ScreenRangeTest:
                 text = test_texts[i]
                 
                 # 检查是否超出屏幕范围
-                if current_y > self.height - 30:
+                if current_y > self.height - 40:
                     print(f"⚠️  第{i+1}行超出屏幕范围 (y={current_y})")
                     break
                     
@@ -194,9 +194,9 @@ class ScreenRangeTest:
                 if success:
                     print(f"📝 第{i+1}行: '{text}' at ({start_x},{current_y})")
                     
-                    # 绘制坐标标记点
-                    self.epdiy.draw_circle(start_x-20, current_y, 3, 8)
-                    self._safe_draw_text(str(current_y), start_x-40, current_y-5, 8)
+                    # 在左侧绘制行号标记，避免重叠
+                    self.epdiy.draw_circle(start_x-25, current_y, 3, 8)
+                    self._safe_draw_text(str(i+1), start_x-35, current_y-5, 8)
                 else:
                     print(f"❌ 第{i+1}行绘制失败")
                     
