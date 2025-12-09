@@ -300,6 +300,9 @@ def scan_and_show():
     print("=== WiFi Scanner ===")
     scanner = get_scanner()
     
+    # 扫描WiFi
+    scanner.scan_wifi()
+    
     # 显示界面
     scanner.show_wifi_list()
     print("WiFi list displayed!")

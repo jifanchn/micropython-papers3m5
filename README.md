@@ -26,9 +26,9 @@
 ```bash
 # 克隆项目
 git clone <repository-url>
-cd micropython-papers3m5
+cd ink-paper
 
-# 准备开发环境
+# 准备开发环境 (下载 micropython, esp-idf 等)
 ./scripts/prepare.sh
 ```
 
@@ -42,18 +42,28 @@ cd micropython-papers3m5
 ### 3. 烧写固件
 
 ```bash
-# 使用智能烧写脚本
+# 使用智能烧写脚本 (自动检测端口)
 ./scripts/flash.sh -e
 ```
 
-### 4. 下载演示程序
+### 4. 硬件测试
+
+```bash
+# 运行硬件测试脚本
+source esp-idf/export.sh
+python scripts/test_hardware.py --all       # 测试所有硬件
+python scripts/test_hardware.py --display   # 仅测试显示屏
+python scripts/test_hardware.py --sensors   # 仅测试传感器
+```
+
+### 5. 下载演示程序
 
 ```bash
 # 下载demo目录中的测试程序到ESP32
 ./scripts/download.sh
 ```
 
-### 5. 基础使用
+### 6. 基础使用
 
 ```python
 import papers3
@@ -338,8 +348,9 @@ srt.cleanup()
 ## 🏗️ 项目架构
 
 ```
-micropython-papers3m5/
+ink-paper/
 ├── micropython/         # MicroPython v1.25.0 (自动克隆)
+├── esp-idf/            # ESP-IDF v5.4.1 (自动克隆)
 ├── epdiy/              # EPDiy 电子墨水屏库
 ├── papers3/            # Papers3 MicroPython 模块
 │   ├── modpapers3.c    # 主模块入口
@@ -350,6 +361,9 @@ micropython-papers3m5/
 │   ├── papers3_rtc.c   # 实时时钟
 │   ├── papers3_touch.c # 触摸屏
 │   ├── papers3_led.c   # LED控制
+│   ├── papers3_i2c.c   # I2C 共享总线管理
+│   ├── papers3_i2c.h   # I2C 头文件
+│   ├── papers3_pins.h  # 引脚定义
 │   ├── chinese_24.h    # 中文字体(生成参数24px, 实际行高70px)
 │   ├── _boot.py        # 启动脚本
 │   ├── flashbdev.py    # Flash设备检测
@@ -358,13 +372,15 @@ micropython-papers3m5/
 │   ├── test.py         # 完整测试框架
 │   ├── screen_range_test.py # 屏幕范围测试工具
 │   └── README.md       # 演示程序使用说明
-├── scripts/            # 构建脚本
+├── scripts/            # 构建和测试脚本
 │   ├── prepare.sh      # 环境准备
 │   ├── build.sh        # 固件编译
 │   ├── flash.sh        # 智能烧写
 │   ├── download.sh     # 演示程序下载工具
+│   ├── test_hardware.py # 硬件测试脚本
 │   └── generate_chinese_font.py # 字体生成工具
-└── build/              # 编译输出
+├── docs/               # 文档
+└── build/              # 编译输出 (git ignored)
 ```
 
 ## 📊 系统信息

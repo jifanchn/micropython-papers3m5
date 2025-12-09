@@ -48,6 +48,7 @@ set(EPDIY_SOURCES
 set(PAPERS3_SOURCES
     ${PAPERS3_DIR}/modpapers3.c
     ${PAPERS3_DIR}/papers3_buzzer.c
+    ${PAPERS3_DIR}/papers3_i2c.c
     ${PAPERS3_DIR}/papers3_battery.c
     ${PAPERS3_DIR}/papers3_gyro.c
     ${PAPERS3_DIR}/papers3_rtc.c

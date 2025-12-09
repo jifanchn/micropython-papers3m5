@@ -1,7 +1,7 @@
 /*
  * Papers3 EPDiy Module Implementation
- * 基于demo工程ED047TC1Driver.h的正确高级API实现
- * 使用epdiy高级接口，避免直接LCD操作
+ * Based on demo project ED047TC1Driver.h
+ * Refactored to use centralized pins and dynamic temperature
  */
 
 #include "py/runtime.h"
@@ -11,73 +11,59 @@
 #include "py/objstr.h"
 #include "py/objint.h"
 
-// ESP-IDF 基础头文件
+// ESP-IDF 
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 
-// FreeRTOS 基础头文件
+// FreeRTOS
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-// GPIO 驱动
+// GPIO
 #include "driver/gpio.h"
 
-// EPDiy 高级API (参考ED047TC1Driver.h)
+// EPDiy High Level API
 #include "epdiy.h"
 #include "epd_highlevel.h"
 #include "epd_board.h"
-#include "lcd_driver.h"  // 关键！包含LCD类型定义
+#include "lcd_driver.h"
 #include <inttypes.h>
 
-// 中文字体支持 - 24px字体
 #include "chinese_24.h"
+#include "papers3_pins.h"
 
-
-
-// MicroPython 静态定义
 #ifndef STATIC
 #define STATIC static
 #endif
 
-// 外部声明 - Papers3板级定义
-// extern const EpdBoardDefinition epd_board_gtxyj;  // 暂时注释，使用默认board
-
 #define TAG "papers3_epdiy"
 
-// Papers3显示参数 (与demo工程一致)
 #define PAPERS3_WIDTH  960
 #define PAPERS3_HEIGHT 540
 
-// ===== Papers3 板级引脚定义 =====
-// 参考 papers3-esp-demo/components/epdiy/src/board/epd_board_gtxyj.c
+// Pin Mapping from papers3_pins.h
+#define EPD_SPV PAPERS3_EPD_SPV
+#define EPD_EN  PAPERS3_EPD_EN
+#define BST_EN  PAPERS3_EPD_BST
+#define EPD_XLE PAPERS3_EPD_XLE
+#define CKV     PAPERS3_EPD_CKV
+#define STH     PAPERS3_EPD_STH
+#define CKH     PAPERS3_EPD_CKH
 
-// 电源和控制引脚 (与gtxyj.c一致)
-#define EPD_SPV GPIO_NUM_17  // EPD_SPV
-#define EPD_EN  GPIO_NUM_45  // EPD_EN (电源使能)
-#define BST_EN  GPIO_NUM_46  // BST_EN (升压使能)
-#define EPD_XLE GPIO_NUM_15  // EPD_XLE (锁存使能)
+// Data Bus
+#define D7 PAPERS3_EPD_D7
+#define D6 PAPERS3_EPD_D6
+#define D5 PAPERS3_EPD_D5
+#define D4 PAPERS3_EPD_D4
+#define D3 PAPERS3_EPD_D3
+#define D2 PAPERS3_EPD_D2
+#define D1 PAPERS3_EPD_D1
+#define D0 PAPERS3_EPD_D0
 
-// 控制信号
-#define CKV GPIO_NUM_18      // 垂直时钟
-#define STH GPIO_NUM_13      // 水平启动
-
-// 时钟引脚
-#define CKH GPIO_NUM_16      // 水平时钟
-
-// 数据总线 D0-D7 (8位并行，与gtxyj.c一致)
-#define D7 GPIO_NUM_10
-#define D6 GPIO_NUM_8
-#define D5 GPIO_NUM_11
-#define D4 GPIO_NUM_9
-#define D3 GPIO_NUM_12
-#define D2 GPIO_NUM_7
-#define D1 GPIO_NUM_14
-#define D0 GPIO_NUM_6
-
-// LCD总线配置 (关键！参考gtxyj.c和v7.c)
+// LCD Bus Config
 static lcd_bus_config_t papers3_lcd_config = {
     .clock = CKH,
     .ckv = CKV,
@@ -93,13 +79,13 @@ static lcd_bus_config_t papers3_lcd_config = {
         [5] = D5,
         [6] = D6,
         [7] = D7,
-        // 只有8位数据总线，其他保持未初始化
     }
 };
 
-// ===== Papers3 板级函数实现 =====
+// Global Temperature State
+static float s_epd_temperature = 25.0f;
 
-// 快速GPIO操作（参考demo工程）
+// Fast GPIO Utils
 inline static void fast_gpio_set_hi(gpio_num_t gpio_num) {
     gpio_set_level(gpio_num, 1);
 }
@@ -108,32 +94,27 @@ inline static void fast_gpio_set_lo(gpio_num_t gpio_num) {
     gpio_set_level(gpio_num, 0);
 }
 
-// 精确延时（参考demo工程）
 void IRAM_ATTR busy_delay(uint32_t cycles) {
     volatile uint64_t counts = esp_timer_get_time() + cycles;
     while (esp_timer_get_time() < counts) ;
 }
 
-// 初始化函数（参考gtxyj.c的epd_board_init）
+// Board Interface
 static void papers3_board_init(uint32_t epd_row_width) {
     ESP_LOGI(TAG, "Papers3 board init, row width: %"PRIu32, epd_row_width);
     
-    // 释放时钟引脚（参考gtxyj.c和v7.c）
     gpio_hold_dis(CKH);
     
-    // 配置GPIO方向（参考gtxyj.c）
     gpio_set_direction(EPD_SPV, GPIO_MODE_OUTPUT);
     gpio_set_direction(EPD_EN, GPIO_MODE_OUTPUT);
     gpio_set_direction(BST_EN, GPIO_MODE_OUTPUT);  
     gpio_set_direction(EPD_XLE, GPIO_MODE_OUTPUT);
 
-    // 初始状态设置（参考gtxyj.c）
-    fast_gpio_set_lo(EPD_XLE);   // EPD_XLE
-    fast_gpio_set_hi(EPD_SPV);   // EPD_SPV
-    fast_gpio_set_lo(EPD_EN);    // EPD_EN
-    fast_gpio_set_lo(BST_EN);    // BST_EN
+    fast_gpio_set_lo(EPD_XLE);
+    fast_gpio_set_hi(EPD_SPV);
+    fast_gpio_set_lo(EPD_EN);
+    fast_gpio_set_lo(BST_EN);
     
-    // 关键！LCD初始化（参考gtxyj.c和v7.c）
     const EpdDisplay_t* display = epd_get_display();
     
     LcdEpdConfig_t config = {
@@ -147,109 +128,75 @@ static void papers3_board_init(uint32_t epd_row_width) {
     epd_lcd_init(&config, display->width, display->height);
 }
 
-// 清理函数（参考gtxyj.c和v7.c的epd_board_deinit）
 static void papers3_board_deinit(void) {
     ESP_LOGI(TAG, "Papers3 board deinit");
-    
-    // 关键！LCD清理（参考v7.c）
     epd_lcd_deinit();
     
-    // GPIO状态复位（参考gtxyj.c）
-    fast_gpio_set_lo(EPD_XLE);  // EPD_XLE
-    fast_gpio_set_lo(EPD_SPV);  // EPD_SPV
-    fast_gpio_set_lo(EPD_EN);   // EPD_EN
-    fast_gpio_set_lo(BST_EN);   // BST_EN
+    fast_gpio_set_lo(EPD_XLE);
+    fast_gpio_set_lo(EPD_SPV);
+    fast_gpio_set_lo(EPD_EN);
+    fast_gpio_set_lo(BST_EN);
 }
 
-// 设置控制状态（参考gtxyj.c的epd_board_set_ctrl）
 static void papers3_board_set_ctrl(epd_ctrl_state_t* state, const epd_ctrl_state_t* const target) {
     if (!state || !target) return;
     
-    if (target->ep_sth) {
-        fast_gpio_set_hi(STH);
-    } else {
-        fast_gpio_set_lo(STH);
-    }
+    if (target->ep_sth) fast_gpio_set_hi(STH);
+    else fast_gpio_set_lo(STH);
 
-    if (target->ep_stv) {
-        fast_gpio_set_hi(EPD_SPV);
-    } else {
-        fast_gpio_set_lo(EPD_SPV);
-    }
+    if (target->ep_stv) fast_gpio_set_hi(EPD_SPV);
+    else fast_gpio_set_lo(EPD_SPV);
 
     if (target->ep_latch_enable) {
         fast_gpio_set_hi(EPD_XLE);
-        fast_gpio_set_hi(EPD_XLE);  // 双重设置，确保稳定
+        fast_gpio_set_hi(EPD_XLE);
     } else {
         fast_gpio_set_lo(EPD_XLE);
         fast_gpio_set_lo(EPD_XLE);
     }
     
-    // 更新状态
     *state = *target;
 }
 
-// 电源开启（参考gtxyj.c的epd_board_poweron）
 static void papers3_board_poweron(epd_ctrl_state_t* state) {
     ESP_LOGI(TAG, "Papers3 board power on");
-    
-    fast_gpio_set_hi(EPD_EN);   // EPD_EN
-    busy_delay(100 * 240);      // 等待稳定
-    fast_gpio_set_hi(BST_EN);   // BST_EN
-    busy_delay(100 * 240);      // 等待稳定
-    fast_gpio_set_hi(EPD_SPV);  // EPD_SPV
-    fast_gpio_set_hi(STH);      // STH
+    fast_gpio_set_hi(EPD_EN);
+    busy_delay(100 * 240);
+    fast_gpio_set_hi(BST_EN);
+    busy_delay(100 * 240);
+    fast_gpio_set_hi(EPD_SPV);
+    fast_gpio_set_hi(STH);
 }
 
-// VCOM测量（参考demo工程，暂时空实现）
 static void papers3_board_measure_vcom(epd_ctrl_state_t* state) {
-    ESP_LOGI(TAG, "Papers3 board measure VCOM");
-    // Papers3可能不支持VCOM测量，保持空实现
+    // Not implemented
 }
 
-// 电源关闭（参考gtxyj.c的epd_board_poweroff）
 static void papers3_board_poweroff(epd_ctrl_state_t* state) {
     ESP_LOGI(TAG, "Papers3 board power off");
-    
-    // 参考gtxyj.c的注释，某些引脚可能不需要关闭
-    // fast_gpio_set_lo(BST_EN); // BST_EN
-    // busy_delay(10 * 240);
-    // fast_gpio_set_lo(EPD_EN);  // EPD_EN
-    // busy_delay(100 * 240);
-    fast_gpio_set_lo(EPD_SPV);  // EPD_SPV - 这是gtxyj.c实际做的
+    fast_gpio_set_lo(EPD_SPV);
 }
 
-// 设置VCOM电压（参考demo工程set_vcom）
 static void papers3_board_set_vcom(int vcom_mv) {
-    ESP_LOGI(TAG, "Papers3 board set VCOM: %d mV", vcom_mv);
-    // Papers3可能不支持可调VCOM，保持空实现
+    // Not implemented
 }
 
-// 获取温度（参考demo工程epd_board_ambient_temperature）
 static float papers3_board_get_temperature(void) {
-    // 返回固定值，与demo工程一致
-    return 25.0f;
+    return s_epd_temperature;
 }
 
-// GPIO方向设置（可选）
 static esp_err_t papers3_board_gpio_set_direction(int pin, bool make_input) {
-    // TODO: 实现GPIO方向设置
     return ESP_OK;
 }
 
-// GPIO读取（可选）
 static bool papers3_board_gpio_read(int pin) {
-    // TODO: 实现GPIO读取
     return false;
 }
 
-// GPIO写入（可选）
 static esp_err_t papers3_board_gpio_write(int pin, bool value) {
-    // TODO: 实现GPIO写入
     return ESP_OK;
 }
 
-// Papers3 板级定义
 static const EpdBoardDefinition papers3_board = {
     .init = papers3_board_init,
     .deinit = papers3_board_deinit,
@@ -264,109 +211,95 @@ static const EpdBoardDefinition papers3_board = {
     .gpio_write = papers3_board_gpio_write,
 };
 
-// ===== Papers3 EPDiy对象类型定义 =====
-
+// Python Object
 typedef struct _papers3_epdiy_obj_t {
     mp_obj_base_t base;
-    EpdiyHighlevelState hl;  // 高级状态管理 (参考ED047TC1Driver)
+    EpdiyHighlevelState hl;
     bool initialized;
-    int temperature;
 } papers3_epdiy_obj_t;
 
-// 前置声明
+// Global flag to track if EPDiy library is initialized
+// This prevents double-initialization across multiple objects or re-imports
+static bool s_epdiy_global_initialized = false;
+
 extern const mp_obj_type_t papers3_epdiy_type;
 
-// ===== 核心功能实现 =====
-
-// 构造函数
 STATIC mp_obj_t papers3_epdiy_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
-    
     papers3_epdiy_obj_t *self = m_new_obj(papers3_epdiy_obj_t);
     self->base.type = &papers3_epdiy_type;
     self->initialized = false;
-    self->temperature = 25;  // 默认温度
-    
     return MP_OBJ_FROM_PTR(self);
 }
 
-// 初始化EPD (参考ED047TC1Driver::init)
 STATIC mp_obj_t papers3_epdiy_init(mp_obj_t self_in) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(self_in);
     
     if (self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy already initialized"));
+        ESP_LOGW(TAG, "EPDiy object already initialized");
+        return mp_const_none;
     }
-    epd_init(&papers3_board, &ED047TC2, EPD_LUT_64K);  // 使用1K LUT减少内存占用
     
+    // If global library is already active (e.g. from previous run), deinit it first to be safe
+    // or just attach to it? Deinit-then-Init is safer for consistent state.
+    if (s_epdiy_global_initialized) {
+        ESP_LOGW(TAG, "EPDiy global state active, re-initializing...");
+        epd_deinit();
+        s_epdiy_global_initialized = false;
+    }
+    
+    epd_init(&papers3_board, &ED047TC2, EPD_LUT_64K);
     self->hl = epd_hl_init(EPD_BUILTIN_WAVEFORM);
     
     self->initialized = true;
-    ESP_LOGI(TAG, "Papers3 EPDiy initialized successfully");
+    s_epdiy_global_initialized = true;
     
+    ESP_LOGI(TAG, "EPDiy initialized");
     return mp_const_none;
 }
 
-// 反初始化
 STATIC mp_obj_t papers3_epdiy_deinit(mp_obj_t self_in) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    // Even if self->initialized is false, we might want to check global state?
+    // No, standard deinit only affects 'self'. But since EPDiy is singleton-ish,
+    // we should track it.
     
     if (self->initialized) {
         epd_deinit();
         self->initialized = false;
-        ESP_LOGI(TAG, "Papers3 EPDiy deinitialized");
+        s_epdiy_global_initialized = false;
+        ESP_LOGI(TAG, "EPDiy deinitialized");
     }
-    
     return mp_const_none;
 }
 
-// 获取framebuffer (参考ED047TC1Driver::getFrameBuffer)
 STATIC mp_obj_t papers3_epdiy_get_framebuffer(mp_obj_t self_in) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
+    if (framebuffer == NULL) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
     
-    // 返回framebuffer的内存地址作为整数
     return mp_obj_new_int((mp_int_t)framebuffer);
 }
 
-// 更新全屏 (参考ED047TC1Driver::updateDisplay)
 STATIC mp_obj_t papers3_epdiy_update_screen(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    // 默认模式：MODE_GC16 (16级灰度)
     int mode = (n_args > 1) ? mp_obj_get_int(args[1]) : MODE_GC16;
     
-    // 电源管理 + 更新 (参考demo工程)
     epd_poweron();
-    epd_hl_update_screen(&self->hl, (enum EpdDrawMode)mode, self->temperature);
+    epd_hl_update_screen(&self->hl, (enum EpdDrawMode)mode, s_epd_temperature);
     epd_poweroff();
-    
     return mp_const_none;
 }
 
-// 更新区域 (参考ED047TC1Driver::updateDisplay区域版本)
 STATIC mp_obj_t papers3_epdiy_update_area(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 5) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, width, height"));
-    }
+    if (n_args < 5) mp_raise_ValueError(MP_ERROR_TEXT("Need x, y, w, h"));
     
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
@@ -374,97 +307,53 @@ STATIC mp_obj_t papers3_epdiy_update_area(size_t n_args, const mp_obj_t *args) {
     int h = mp_obj_get_int(args[4]);
     int mode = (n_args > 5) ? mp_obj_get_int(args[5]) : MODE_GC16;
     
-    EpdRect area = {
-        .x = x,
-        .y = y,
-        .width = w,
-        .height = h
-    };
+    EpdRect area = { .x = x, .y = y, .width = w, .height = h };
     
-    // 电源管理 + 区域更新
     epd_poweron();
-    epd_hl_update_area(&self->hl, (enum EpdDrawMode)mode, self->temperature, area);
+    epd_hl_update_area(&self->hl, (enum EpdDrawMode)mode, s_epd_temperature, area);
     epd_poweroff();
-    
     return mp_const_none;
 }
 
-// 清屏 (参考ED047TC1Driver::clear)
 STATIC mp_obj_t papers3_epdiy_clear(mp_obj_t self_in) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     epd_poweron();
     epd_clear();
     epd_poweroff();
-    
     return mp_const_none;
 }
 
-// 获取显示尺寸
-STATIC mp_obj_t papers3_epdiy_get_width(mp_obj_t self_in) {
-    return mp_obj_new_int(PAPERS3_WIDTH);
-}
+STATIC mp_obj_t papers3_epdiy_get_width(mp_obj_t self_in) { return mp_obj_new_int(PAPERS3_WIDTH); }
+STATIC mp_obj_t papers3_epdiy_get_height(mp_obj_t self_in) { return mp_obj_new_int(PAPERS3_HEIGHT); }
 
-STATIC mp_obj_t papers3_epdiy_get_height(mp_obj_t self_in) {
-    return mp_obj_new_int(PAPERS3_HEIGHT);
-}
-
-// 设置温度
 STATIC mp_obj_t papers3_epdiy_set_temperature(mp_obj_t self_in, mp_obj_t temp_obj) {
-    papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    self->temperature = mp_obj_get_int(temp_obj);
+    s_epd_temperature = mp_obj_get_float(temp_obj);
     return mp_const_none;
 }
 
-// 获取温度
 STATIC mp_obj_t papers3_epdiy_get_temperature(mp_obj_t self_in) {
-    papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    return mp_obj_new_int(self->temperature);
+    return mp_obj_new_float(s_epd_temperature);
 }
 
-// ===== 绘图功能 =====
-
-// 绘制像素点
+// Drawing wrapper helpers
 STATIC mp_obj_t papers3_epdiy_draw_pixel(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 4) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
     uint8_t color = mp_obj_get_int(args[3]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    epd_draw_pixel(x, y, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_draw_pixel(x, y, color, fb);
     return mp_const_none;
 }
 
-// 绘制线条
 STATIC mp_obj_t papers3_epdiy_draw_line(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 6) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x0, y0, x1, y1, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x0 = mp_obj_get_int(args[1]);
     int y0 = mp_obj_get_int(args[2]);
@@ -472,139 +361,72 @@ STATIC mp_obj_t papers3_epdiy_draw_line(size_t n_args, const mp_obj_t *args) {
     int y1 = mp_obj_get_int(args[4]);
     uint8_t color = mp_obj_get_int(args[5]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    epd_draw_line(x0, y0, x1, y1, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_draw_line(x0, y0, x1, y1, color, fb);
     return mp_const_none;
 }
 
-// 绘制矩形框
 STATIC mp_obj_t papers3_epdiy_draw_rect(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 6) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, width, height, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
-    int width = mp_obj_get_int(args[3]);
-    int height = mp_obj_get_int(args[4]);
+    int w = mp_obj_get_int(args[3]);
+    int h = mp_obj_get_int(args[4]);
     uint8_t color = mp_obj_get_int(args[5]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    EpdRect rect = { .x = x, .y = y, .width = width, .height = height };
-    epd_draw_rect(rect, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_draw_rect((EpdRect){x,y,w,h}, color, fb);
     return mp_const_none;
 }
 
-// 绘制填充矩形
 STATIC mp_obj_t papers3_epdiy_fill_rect(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 6) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, width, height, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
-    int width = mp_obj_get_int(args[3]);
-    int height = mp_obj_get_int(args[4]);
+    int w = mp_obj_get_int(args[3]);
+    int h = mp_obj_get_int(args[4]);
     uint8_t color = mp_obj_get_int(args[5]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    EpdRect rect = { .x = x, .y = y, .width = width, .height = height };
-    epd_fill_rect(rect, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_fill_rect((EpdRect){x,y,w,h}, color, fb);
     return mp_const_none;
 }
 
-// 绘制圆形轮廓
 STATIC mp_obj_t papers3_epdiy_draw_circle(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 5) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, radius, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
-    int radius = mp_obj_get_int(args[3]);
+    int r = mp_obj_get_int(args[3]);
     uint8_t color = mp_obj_get_int(args[4]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    epd_draw_circle(x, y, radius, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_draw_circle(x, y, r, color, fb);
     return mp_const_none;
 }
 
-// 绘制填充圆形
 STATIC mp_obj_t papers3_epdiy_fill_circle(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 5) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x, y, radius, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x = mp_obj_get_int(args[1]);
     int y = mp_obj_get_int(args[2]);
-    int radius = mp_obj_get_int(args[3]);
+    int r = mp_obj_get_int(args[3]);
     uint8_t color = mp_obj_get_int(args[4]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    epd_fill_circle(x, y, radius, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_fill_circle(x, y, r, color, fb);
     return mp_const_none;
 }
 
-// 绘制三角形轮廓
 STATIC mp_obj_t papers3_epdiy_draw_triangle(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 8) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x0, y0, x1, y1, x2, y2, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x0 = mp_obj_get_int(args[1]);
     int y0 = mp_obj_get_int(args[2]);
@@ -614,27 +436,14 @@ STATIC mp_obj_t papers3_epdiy_draw_triangle(size_t n_args, const mp_obj_t *args)
     int y2 = mp_obj_get_int(args[6]);
     uint8_t color = mp_obj_get_int(args[7]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    epd_draw_triangle(x0, y0, x1, y1, x2, y2, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_draw_triangle(x0, y0, x1, y1, x2, y2, color, fb);
     return mp_const_none;
 }
 
-// 绘制填充三角形
 STATIC mp_obj_t papers3_epdiy_fill_triangle(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args < 8) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need x0, y0, x1, y1, x2, y2, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     int x0 = mp_obj_get_int(args[1]);
     int y0 = mp_obj_get_int(args[2]);
@@ -644,114 +453,41 @@ STATIC mp_obj_t papers3_epdiy_fill_triangle(size_t n_args, const mp_obj_t *args)
     int y2 = mp_obj_get_int(args[6]);
     uint8_t color = mp_obj_get_int(args[7]);
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    epd_fill_triangle(x0, y0, x1, y1, x2, y2, color, framebuffer);
-    
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb) epd_fill_triangle(x0, y0, x1, y1, x2, y2, color, fb);
     return mp_const_none;
 }
 
-// 绘制文字 (中文支持，24px字体)
 STATIC mp_obj_t papers3_epdiy_draw_text(size_t n_args, const mp_obj_t *args) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-    
-    if (!self->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("EPDiy not initialized"));
-    }
-    
-    if (n_args != 5) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Need text, x, y, color"));
-    }
+    if (!self->initialized) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Not initialized"));
     
     const char* text = mp_obj_str_get_str(args[1]);
     int x = mp_obj_get_int(args[2]);
     int y = mp_obj_get_int(args[3]);
     uint8_t color = mp_obj_get_int(args[4]);
     
-    ESP_LOGI(TAG, "Drawing text: '%s' at (%d,%d) color=%d", text, x, y, color);
+    uint8_t* fb = epd_hl_get_framebuffer(&self->hl);
+    if (fb == NULL) mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
     
-    uint8_t* framebuffer = epd_hl_get_framebuffer(&self->hl);
-    if (framebuffer == NULL) {
-        ESP_LOGE(TAG, "Failed to get framebuffer");
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to get framebuffer"));
-    }
-    
-    // 使用24px中文字体
     const EpdFont* font = &Chinese24;
-    ESP_LOGI(TAG, "Using font Chinese24: advance_y=%d, ascender=%d, descender=%d", 
-             font->advance_y, font->ascender, font->descender);
-    
-    // 设置字体属性
     EpdFontProperties props = epd_font_properties_default();
-    props.fg_color = (color >> 4) & 0x0F;  // 前景色 (高4位)
-    props.bg_color = 0x0F;          // 背景色设为白色 (15)
-    props.fallback_glyph = '?';     // 缺失字符用问号替代
-    props.flags = EPD_DRAW_BACKGROUND; // 绘制背景
+    props.fg_color = (color >> 4) & 0x0F;
+    props.bg_color = 0x0F;
+    props.fallback_glyph = '?';
+    props.flags = EPD_DRAW_BACKGROUND;
     
-    ESP_LOGI(TAG, "Font properties: fg_color=%d, bg_color=%d, flags=%d", 
-             props.fg_color, props.bg_color, props.flags);
-    
-    // 使用选定的字体绘制文本
-    EpdRect area = epd_get_string_rect(font, (char*)text, x, y, 0, &props);
-    ESP_LOGI(TAG, "Text area: x=%d, y=%d, width=%d, height=%d", 
-             area.x, area.y, area.width, area.height);
-    
-    // 检查边界
-    if (x + area.width > PAPERS3_WIDTH || y + area.height > PAPERS3_HEIGHT) {
-        ESP_LOGW(TAG, "Text may be clipped: pos(%d,%d) size(%d,%d) screen(%d,%d)", 
-                 x, y, area.width, area.height, PAPERS3_WIDTH, PAPERS3_HEIGHT);
-    }
-    
-    // 绘制文本
-    int orig_x = x, orig_y = y;
-    enum EpdDrawError err = epd_write_string(font, (char*)text, &x, &y, framebuffer, &props);
-    
-    ESP_LOGI(TAG, "epd_write_string result: error=%d, final_pos=(%d,%d)", err, x, y);
-    
+    enum EpdDrawError err = epd_write_string(font, (char*)text, &x, &y, fb, &props);
     if (err != EPD_DRAW_SUCCESS) {
-        ESP_LOGE(TAG, "epd_write_string failed with error %d for text '%s' at (%d,%d)", 
-                 err, text, orig_x, orig_y);
-        
-        // 提供更详细的错误信息
-        switch (err) {
-            case EPD_DRAW_LOOKUP_NOT_IMPLEMENTED:
-                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Font glyph lookup not implemented"));
-                break;
-            case EPD_DRAW_GLYPH_FALLBACK_FAILED:
-                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Font fallback glyph failed"));
-                break;
-            case EPD_DRAW_STRING_INVALID:
-                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Invalid string"));
-                break;
-            case EPD_DRAW_NO_DRAWABLE_CHARACTERS:
-                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("No drawable characters"));
-                break;
-            case EPD_DRAW_FAILED_ALLOC:
-                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Memory allocation failed"));
-                break;
-            case EPD_DRAW_INVALID_FONT_FLAGS:
-                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Invalid font flags"));
-                break;
-            default:
-                mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to draw text - unknown error"));
-                break;
-        }
+        ESP_LOGE(TAG, "Draw text failed: %d", err);
     }
-    
-    ESP_LOGI(TAG, "Successfully drew text '%s' at (%d,%d) with color 0x%02X", text, orig_x, orig_y, color);
-    
     return mp_const_none;
 }
 
-// 添加简便的update方法（别名）
+// Shortcut aliases
 STATIC mp_obj_t papers3_epdiy_update(mp_obj_t self_in) {
     return papers3_epdiy_update_screen(1, &self_in);
 }
-
-// ===== MicroPython 方法表和对象定义 =====
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_init_obj, papers3_epdiy_init);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_deinit_obj, papers3_epdiy_deinit);
@@ -765,7 +501,6 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_get_height_obj, papers3_epdiy_get
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(papers3_epdiy_set_temperature_obj, papers3_epdiy_set_temperature);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(papers3_epdiy_get_temperature_obj, papers3_epdiy_get_temperature);
 
-// 绘图函数定义
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_pixel_obj, 4, 4, papers3_epdiy_draw_pixel);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_line_obj, 6, 6, papers3_epdiy_draw_line);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_rect_obj, 6, 6, papers3_epdiy_draw_rect);
@@ -776,28 +511,20 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_triangle_obj, 8, 8
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_fill_triangle_obj, 8, 8, papers3_epdiy_fill_triangle);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(papers3_epdiy_draw_text_obj, 5, 5, papers3_epdiy_draw_text);
 
-// 方法字典
 STATIC const mp_rom_map_elem_t papers3_epdiy_locals_dict_table[] = {
-    // 核心方法
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&papers3_epdiy_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&papers3_epdiy_deinit_obj) },
-    
-    // 显示更新
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&papers3_epdiy_deinit_obj) }, // Auto-deinit on GC
     { MP_ROM_QSTR(MP_QSTR_get_framebuffer), MP_ROM_PTR(&papers3_epdiy_get_framebuffer_obj) },
     { MP_ROM_QSTR(MP_QSTR_update_screen), MP_ROM_PTR(&papers3_epdiy_update_screen_obj) },
     { MP_ROM_QSTR(MP_QSTR_update_area), MP_ROM_PTR(&papers3_epdiy_update_area_obj) },
     { MP_ROM_QSTR(MP_QSTR_update), MP_ROM_PTR(&papers3_epdiy_update_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&papers3_epdiy_clear_obj) },
-    
-    // 属性访问
     { MP_ROM_QSTR(MP_QSTR_width), MP_ROM_PTR(&papers3_epdiy_get_width_obj) },
     { MP_ROM_QSTR(MP_QSTR_height), MP_ROM_PTR(&papers3_epdiy_get_height_obj) },
-    
-    // 温度控制
     { MP_ROM_QSTR(MP_QSTR_set_temperature), MP_ROM_PTR(&papers3_epdiy_set_temperature_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_temperature), MP_ROM_PTR(&papers3_epdiy_get_temperature_obj) },
     
-    // 绘图函数
     { MP_ROM_QSTR(MP_QSTR_draw_pixel), MP_ROM_PTR(&papers3_epdiy_draw_pixel_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw_line), MP_ROM_PTR(&papers3_epdiy_draw_line_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw_rect), MP_ROM_PTR(&papers3_epdiy_draw_rect_obj) },
@@ -807,22 +534,13 @@ STATIC const mp_rom_map_elem_t papers3_epdiy_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_draw_triangle), MP_ROM_PTR(&papers3_epdiy_draw_triangle_obj) },
     { MP_ROM_QSTR(MP_QSTR_fill_triangle), MP_ROM_PTR(&papers3_epdiy_fill_triangle_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw_text), MP_ROM_PTR(&papers3_epdiy_draw_text_obj) },
-    
-    // 常量 - 绘制模式
-    { MP_ROM_QSTR(MP_QSTR_MODE_INIT), MP_ROM_INT(MODE_INIT) },
-    { MP_ROM_QSTR(MP_QSTR_MODE_DU), MP_ROM_INT(MODE_DU) },
-    { MP_ROM_QSTR(MP_QSTR_MODE_DU4), MP_ROM_INT(MODE_DU4) },
-    { MP_ROM_QSTR(MP_QSTR_MODE_GC16), MP_ROM_INT(MODE_GC16) },
-    { MP_ROM_QSTR(MP_QSTR_MODE_GL16), MP_ROM_INT(MODE_GL16) },
-    { MP_ROM_QSTR(MP_QSTR_MODE_A2), MP_ROM_INT(MODE_A2) },
 };
 STATIC MP_DEFINE_CONST_DICT(papers3_epdiy_locals_dict, papers3_epdiy_locals_dict_table);
 
-// Papers3 EPDiy类型定义
 MP_DEFINE_CONST_OBJ_TYPE(
     papers3_epdiy_type,
     MP_QSTR_EPDiy,
     MP_TYPE_FLAG_NONE,
     make_new, papers3_epdiy_make_new,
     locals_dict, &papers3_epdiy_locals_dict
-); 
+);

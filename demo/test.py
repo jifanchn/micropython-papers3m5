@@ -145,6 +145,7 @@ class Test:
         print("  test.rtc_test()       - RTC实时时钟测试")
         print("  test.touch_test()     - 触摸屏基础测试")
         print("  test.display_test()   - 显示器基础测试")
+        print("  test.temperature_test() - EPD温度设置测试")
         print("  test.simple_chinese() - 简单中文显示测试")
         print("")
         print("🎨 高级测试:")
@@ -177,6 +178,7 @@ class Test:
         self.rtc_test()
         self.touch_test()
         self.display_test()
+        self.temperature_test()
         self.chinese()
         
         print("🎉 基础测试完成！")
@@ -344,6 +346,38 @@ class Test:
             print("✅ 显示器测试完成")
         except Exception as e:
             print(f"❌ 显示器测试失败: {e}")
+            
+    def temperature_test(self):
+        """EPD温度设置测试"""
+        if not self._check_init():
+            return
+            
+        print("\n--- EPD温度设置测试 ---")
+        if self.epdiy is None:
+            print("❌ EPD显示器未初始化，跳过测试")
+            return
+            
+        try:
+            # 读取默认温度
+            temp = self.epdiy.get_temperature()
+            print(f"当前EPD温度: {temp:.1f}°C")
+            
+            # 设置新温度
+            new_temp = 26.0
+            print(f"设置EPD温度为: {new_temp:.1f}°C")
+            self.epdiy.set_temperature(new_temp)
+            
+            # 验证设置
+            temp = self.epdiy.get_temperature()
+            print(f"验证EPD温度: {temp:.1f}°C")
+            
+            if abs(temp - new_temp) < 0.1:
+                print("✅ 温度设置成功")
+            else:
+                print("❌ 温度设置验证失败")
+                
+        except Exception as e:
+            print(f"❌ 温度测试失败: {e}")
             
     def chinese(self):
         """中文字体测试"""

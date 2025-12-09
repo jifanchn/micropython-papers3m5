@@ -1,50 +1,44 @@
+# =============================================================================
+# Papers3 MicroPython Project - Git Ignore
+# =============================================================================
+
 # Build directories
 build/
 .pio/
-.vscode/
 
-# Git repositories (auto-cloned by prepare.sh)
+# Git submodules (auto-cloned by prepare.sh)
 micropython/
+esp-idf/
 
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
+# =============================================================================
+# ESP-IDF & MicroPython Build Artifacts
+# =============================================================================
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+*.o
+*.a
+*.elf
+*.bin
+*.map
 
-# Thumbnails
-._*
+# MicroPython build files
+micropython/ports/esp32/build*/
+micropython/ports/esp32/boards/PAPERS3/
+micropython/ports/esp32/modules/papers3/
 
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
 
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
+# ESP-IDF generated
+.config
 
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msm
-*.msp
-*.lnk
-
-# Linux
-*~
-
+# =============================================================================
 # Python
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -53,116 +47,75 @@ __pycache__/
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
+.venv/
 
-# IDE and Editor files
-*.swp
-*.swo
-*~
-.idea/
-*.iml
-*.sublime-project
-*.sublime-workspace
-
-# ESP-IDF
-sdkconfig
-sdkconfig.old
-managed_components/
-
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.log
-
-# Documentation builds
-docs/_build/
-
-# Node.js (if used for tools)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# ESP-IDF generated files
-dependencies.lock
-
-# MicroPython build artifacts
-*.o
-*.a
-*.elf
-*.bin
-*.map
-**/*.pyc
-**/__pycache__/
-
-# System files
-.DS_Store
-Thumbs.db
-*~
-.*.swp
-.*.swo
-
-# IDE/Editor files
-.vscode/settings.json
-.vscode/launch.json
-*.code-workspace
-.idea/
-
-# Logs
-*.log
-**/log/
-
-# Cache files
-**/.cache/
-**/cache/
-
-# ESP-IDF tools
-**/tools/
-**/esp-idf/
-
-# CMake generated files
-**/CMakeFiles/
-**/CMakeCache.txt
-**/cmake_install.cmake
-**/Makefile
-
-# Flash/partition files
-*.csv.bak
-
-# MicroPython build files
-micropython/ports/esp32/build*/
-micropython/ports/esp32/boards/PAPERS3/
-micropython/ports/esp32/modules/papers3/
-
-# ESP-IDF build files
-.config
-
-# Python
-*.pyc
-*.pyo
-*.pyd
-
-# IDE files
+# =============================================================================
+# IDE and Editors
+# =============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+*.iml
+*.code-workspace
 
+# =============================================================================
 # macOS
+# =============================================================================
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
 
-# Log files
+# =============================================================================
+# Windows
+# =============================================================================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# =============================================================================
+# Linux
+# =============================================================================
+*~
+
+# =============================================================================
+# Logs and Temp Files
+# =============================================================================
 *.log
-
-# Temporary files
 *.tmp
-*.temp 
+*.temp
+*.bak
+**/log/
+**/.cache/
+**/cache/
 
-# libraries
-micropython
-micropython/*
+# =============================================================================
+# Node.js (if used for tools)
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-demo.py
+# =============================================================================
+# Documentation builds
+# =============================================================================
+docs/_build/
