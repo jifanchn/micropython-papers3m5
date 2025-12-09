@@ -509,4 +509,16 @@ epdiy.draw_text("状态: 就绪", 20, 500, 8)
 
 ---
 
+### 🖥️ EPDiy Driver Stability Guide
+
+For optimal stability and display quality on Papers3:
+
+- **Initialization**: Always perform a full `epd.init()` (hardware init) to ensure correct panel configuration after soft resets.
+- **Deinitialization**: Use `epd.deinit()` (which calls `epd_hl_deinit`) to free all buffers and reset internal state. This prevents `[Errno 6] Device not configured` crashes during repeated runs.
+- **Cleaning/Ghosting**: To prevent ghosting, call `epd.clear()` **once** at the start of your application (`poweron` -> `clear` -> `poweroff`). 
+  > **Warning**: Avoid calling `epd.clear()` inside tight loops with initialization cycles, as rapid power cycling can cause USB/System instability. Instead, rely on `fill_rect(255)` (White) and `update()` for content refreshing within the loop.
+- **Power Management**: The driver manages power automatically for updates, but manual power control is available via `epd_poweron()` and `epd_poweroff()` if needed for custom sequences.
+
+---
+
 **Happy Coding! 🚀**

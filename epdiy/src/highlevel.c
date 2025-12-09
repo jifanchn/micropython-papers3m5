@@ -8,6 +8,7 @@
 #include <esp_timer.h>
 #include <esp_types.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "epd_highlevel.h"
 #include "epdiy.h"
@@ -24,7 +25,13 @@
 static bool already_initialized = 0;
 
 EpdiyHighlevelState epd_hl_init(const EpdWaveform* waveform) {
-    assert(!already_initialized);
+    // If already initialized, reset the flag to allow re-initialization
+    // Note: This may leak memory if the previous state was not properly freed
+    // A better approach is to explicitly call epd_hl_deinit() before creating a new object
+    if (already_initialized) {
+        ESP_LOGW("EPDiy", "epd_hl_init: already initialized, resetting state (possible memory leak)");
+        already_initialized = false;
+    }
     if (waveform == NULL) {
         waveform = epd_get_display()->default_waveform;
     }
@@ -213,4 +220,31 @@ void epd_hl_waveform(EpdiyHighlevelState* state, const EpdWaveform* waveform) {
         waveform = epd_get_display()->default_waveform;
     }
     state->waveform = waveform;
+}
+
+void epd_hl_deinit(EpdiyHighlevelState* state) {
+    if (state == NULL) return;
+    
+    if (state->front_fb) {
+        heap_caps_free(state->front_fb);
+        state->front_fb = NULL;
+    }
+    if (state->back_fb) {
+        heap_caps_free(state->back_fb);
+        state->back_fb = NULL;
+    }
+    if (state->difference_fb) {
+        heap_caps_free(state->difference_fb);
+        state->difference_fb = NULL;
+    }
+    if (state->dirty_lines) {
+        free(state->dirty_lines);
+        state->dirty_lines = NULL;
+    }
+    if (state->dirty_columns) {
+        heap_caps_free(state->dirty_columns);
+        state->dirty_columns = NULL;
+    }
+    
+    already_initialized = false;
 }

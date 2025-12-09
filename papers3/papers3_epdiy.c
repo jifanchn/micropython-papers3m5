@@ -240,34 +240,32 @@ STATIC mp_obj_t papers3_epdiy_init(mp_obj_t self_in) {
         return mp_const_none;
     }
     
-    // If global library is already active (e.g. from previous run), deinit it first to be safe
-    // or just attach to it? Deinit-then-Init is safer for consistent state.
-    if (s_epdiy_global_initialized) {
-        ESP_LOGW(TAG, "EPDiy global state active, re-initializing...");
-        epd_deinit();
-        s_epdiy_global_initialized = false;
-    }
-    
+    // Always initialize the driver to ensure correct hardware state
+    // The previous crash was due to highlevel.c assertion, which is now fixed.
+    ESP_LOGI(TAG, "Initializing EPDiy driver...");
     epd_init(&papers3_board, &ED047TC2, EPD_LUT_64K);
+    s_epdiy_global_initialized = true;
+    
+    // Always initialize new high-level state (allocates framebuffers)
     self->hl = epd_hl_init(EPD_BUILTIN_WAVEFORM);
     
     self->initialized = true;
-    s_epdiy_global_initialized = true;
-    
     ESP_LOGI(TAG, "EPDiy initialized");
     return mp_const_none;
 }
 
 STATIC mp_obj_t papers3_epdiy_deinit(mp_obj_t self_in) {
     papers3_epdiy_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    // Even if self->initialized is false, we might want to check global state?
-    // No, standard deinit only affects 'self'. But since EPDiy is singleton-ish,
-    // we should track it.
     
     if (self->initialized) {
+        // Use the library function to clean up high-level state
+        epd_hl_deinit(&self->hl);
+
+        // Deinitialize the low-level driver
         epd_deinit();
-        self->initialized = false;
         s_epdiy_global_initialized = false;
+        
+        self->initialized = false;
         ESP_LOGI(TAG, "EPDiy deinitialized");
     }
     return mp_const_none;

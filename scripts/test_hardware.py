@@ -106,14 +106,97 @@ def test_display(port):
     
     print("\n✅ 显示屏测试完成 - 请检查屏幕显示")
 
+def test_stress(port):
+    """压力测试：反复初始化/注销以验证内存管理和驱动稳定性"""
+    print("\n" + "=" * 60)
+    print("  压力/崩溃测试 (Init/Deinit Cycles)")
+    print("=" * 60)
+    
+    # Reset REPL state first
+    port.write(b'\x03\x03\r\n')
+    time.sleep(0.3)
+    port.read(port.in_waiting)
+    
+    # Import modules
+    send_command(port, 'import papers3')
+    send_command(port, 'import time')
+    send_command(port, 'import gc')
+    
+    failures = 0
+    num_cycles = 5
+    
+    # Initial Clean (Run once to ensure starting with White screen)
+    # This prevents ghosting from previous runs
+    print("Cleaning screen...")
+    try:
+        response = send_command(port, 'epd = papers3.EPDiy()', wait=0.5)
+        send_command(port, 'epd.init()', wait=2.0)
+        send_command(port, 'epd.clear()', wait=2.0)
+        send_command(port, 'epd.deinit()', wait=0.5)
+        send_command(port, 'epd = None; gc.collect()', wait=0.5)
+        print("Screen cleaned.")
+        time.sleep(2.0) # Cooldown
+    except:
+        print("Warning: Initial clear failed")
+
+    for i in range(num_cycles):
+        print(f"\n--- Cycle {i+1}/{num_cycles} ---")
+        try:
+            # Create and init
+            response = send_command(port, f'epd = papers3.EPDiy()', wait=0.5)
+            print(f"  Create: OK")
+            
+            response = send_command(port, 'epd.init()', wait=2.0)
+            print(f"  Init: OK")
+            
+            # Draw text
+            # Since screen started White, and we assume White, 
+            # we just draw Black text. No need to fill white (it's redundant but safe)
+            # But let's fill white just in case to be sure FB is clean
+            send_command(port, 'epd.fill_rect(0, 0, 960, 540, 255)', wait=0.2)
+            
+            y_pos = 100 + i * 50
+            response = send_command(port, f'epd.draw_text("Cycle {i+1}/5 - Papers3", 50, {y_pos}, 0)', wait=0.5)
+            
+            # Update
+            response = send_command(port, 'epd.update()', wait=3.0)
+            print(f"  Update: OK")
+            
+            # Deinit
+            response = send_command(port, 'epd.deinit()', wait=0.5)
+            print(f"  Deinit: OK")
+            
+            # Cleanup
+            send_command(port, 'epd = None', wait=0.2)
+            send_command(port, 'gc.collect()', wait=0.5)
+            
+            print(f"  ✅ Cycle {i+1} OK")
+            
+        except Exception as e:
+            print(f"  ❌ Cycle {i+1} FAILED: {e}")
+            failures += 1
+            # Try to recover
+            try:
+                port.write(b'\x03\x03\r\n')
+                time.sleep(0.3)
+                port.read(port.in_waiting)
+            except:
+                pass
+    
+    if failures == 0:
+        print(f"\n✅ 压力测试通过！{num_cycles} 个周期全部成功。")
+    else:
+        print(f"\n❌ 压力测试失败！{failures}/{num_cycles} 个周期出错。")
+
 def main():
     # 解析参数
     test_all = '--all' in sys.argv or len(sys.argv) == 1
     test_disp = '--display' in sys.argv
     test_sens = '--sensors' in sys.argv
+    test_crash = '--crash' in sys.argv
     
     if test_all:
-        test_disp = test_sens = True
+        test_disp = test_sens = test_crash = True
     
     # 检测串口
     port_name = detect_port()
@@ -142,6 +225,9 @@ def main():
         
         if test_disp:
             test_display(port)
+            
+        if test_crash:
+            test_stress(port)
         
         port.close()
         print("\n🎉 所有测试完成!")

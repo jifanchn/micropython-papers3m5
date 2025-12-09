@@ -148,8 +148,10 @@ void epd_hl_set_all_white(EpdiyHighlevelState* state);
 void epd_fullclear(EpdiyHighlevelState* state, int temperature);
 
 /**
- * Just changes the used Waveform
+ * Deinitialize the high-level state, freeing memory and resetting global state.
  */
+void epd_hl_deinit(EpdiyHighlevelState* state);
+
 void epd_hl_waveform(EpdiyHighlevelState* state, const EpdWaveform* waveform);
 
 #ifdef __cplusplus
